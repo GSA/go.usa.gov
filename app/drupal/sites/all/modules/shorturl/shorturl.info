@@ -1,0 +1,16 @@
+; $Id: shorturl.info,v 1.1 2009/05/13 17:41:39 inadarei Exp $
+name = Short URL
+description = API to Shorten Any URL a-la bit.ly, tinyURL, is.gd etc.
+core = 7.x
+package = CTAC
+configure = admin/settings/shorturl
+
+files[] = includes/shorturl.engine.inc
+files[] = includes/shorturl.metrics.inc
+files[] = includes/shorturl.blocks.inc
+files[] = includes/shorturl.views.inc
+files[] = includes/shorturl.admin.inc
+
+version = "7.x-2.0"
+project = "shorturl"
+datestamp = "1462205855"

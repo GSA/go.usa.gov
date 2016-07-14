@@ -1,0 +1,14 @@
+version: '2'
+services:
+    web:
+      build:
+        dockerfile: docker/drupal/Dockerfile
+        context: .
+      ports:
+        - 80:80
+        - 443:443
+      volumes:
+        - ./app/drupal/sites:/var/www/html/sites:rw
+      env_file:
+        - dev.env
+        #- prod.env

@@ -1,0 +1,4 @@
+; $Id$
+name = Go
+description = "Go.USA.Gov specific customizations"
+core = 7.x

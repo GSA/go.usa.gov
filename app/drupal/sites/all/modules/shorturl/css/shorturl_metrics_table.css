@@ -1,0 +1,497 @@
+  /* LAYOUT */
+
+  div.datepicker_bootstrap { z-index:6; font-size: 100%; }
+  div.datepicker_bootstrap table { width:100%; }
+  div.datepicker_bootstrap div .unavailable { color: #D0D0D0 !important; }
+  div.datepicker_bootstrap th,
+  div.datepicker_bootstrap td
+  {
+    text-align: center;
+  }
+  div.datepicker_bootstrap thead th.title
+  {
+    background: none;
+    border: none;
+    text-align: center;
+    font-size: 1em;
+    color: #000;
+  }
+  div.datepicker_bootstrap .header .titleText
+  {
+    width: 12em;
+  }
+  .datepicker_bootstrap .header .title .titleText .column {
+    float: none;
+  }
+  .metricsRange
+  {
+    display:     block;
+    text-align: center;
+    width:        60em;
+  }
+  .metricsdata input.from-date,
+  .metricsdata input.to-date,
+  .metricsdata input.submit
+  {
+    width: 7em;
+    margin: 0 2em 0 0;
+    text-align: center;
+  }
+  .metricsdata input.from-date,
+  .metricsdata input.to-date
+  {
+    padding: .2em 0;
+  }
+
+  .shorturl caption
+  {
+    background:      none;
+    margin: 1.4em 0 0 1em;
+    font-size:      1.2em;
+    line-height:   1.25em;
+  }
+  .shorturl tfoot
+  {
+    display: none;
+  }
+
+  .metricsdata .metrics-view-message
+  {
+    margin-left: 3em;
+    font-weight: bold;
+  }
+
+  .metricsdata .total-container
+  {
+    font-weight: bold;
+  }
+  .metricsdata .total-container .total-clicks
+  {
+    margin-left: 1em;
+  }
+  .metricsdata .export-container
+  {
+    margin-left: 1em;
+  }
+  .metricsdata .export-container form
+  {
+    display: inline;
+  }
+  .metricsdata .export-container form input[type=submit]
+  {
+    color: #2B5781;
+    border: none;
+    background: none;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  table.hbar-graph
+  {
+    display: block;
+    position:  relative;
+    margin:           0;
+    padding:          0;
+    margin-top:    .5em;
+    table-layout:       fixed;
+    border-collapse: collapse;
+    border-spacing:         0;
+  }
+  table.hbar-graph th,
+  table.hbar-graph td,
+  table.hbar-graph caption
+  {
+    background: none;
+    padding:       0;
+    border:        0;
+    margin:        0;
+  }
+  table.hbar-graph caption
+  {
+    display:     block;
+    width:        100%;
+    position: absolute;
+    top:0;      left:0;
+    text-align: center;
+    height:        2em;
+    line-height:   2em;
+    margin:        0px;
+    font-size:     1em;
+  }
+  table.hbar-graph caption .title
+  {
+    text-align: center;
+    display:     block;
+    height:        2em;
+  }
+
+  table.hbar-graph thead
+  {
+    display: block;
+    position: absolute;
+    top: 0; right: 0;
+    height: 100%;
+    width:  100%;
+  }
+  table.hbar-graph thead tr .label
+  {
+    position: absolute;
+    bottom:     -2.25em;
+    width:        100%;
+    text-align: center;
+    font-size:     1em;
+  }
+  table.hbar-graph thead tr .value
+  {
+    position: absolute;
+    font-size: 1em;
+    top:    2.25em;
+    right:    101%;
+  }
+  table.hbar-graph thead tr .scale
+  {
+    display: none;
+  }
+
+  table.hbar-graph tbody tr,
+  table.hbar-graph tbody td,
+  table.hbar-graph tbody th
+  {
+    display: block;
+    float:    left;
+    bottom:      0;
+    z-index:     3;
+    margin:      0;
+    padding:     0;
+    text-align: center;
+  }
+  table.hbar-graph tbody tr
+  {
+    position: relative;
+    top:           4em;
+    -margin-left:   1px;
+    -margin-right:  1px;
+    border: solid 1px transparent;
+    border-width: 0px 1px;
+  }
+  /*
+  table.hbar-graph tbody tr:first-child
+  {
+    border-left: solid 1px;
+  }
+  table.hbar-graph tbody tr:last-child
+  {
+    border-right: solid 1px;
+  }
+  */
+  table.hbar-graph tbody tr:hover,
+  table.hbar-graph tbody tr:focus,
+  table.hbar-graph tbody tr:active,
+  table.hbar-graph tbody tr.selected
+  {
+    z-index: 5;
+  }
+  table.hbar-graph tbody tr .value
+  {
+    position: absolute;
+    bottom:    0;
+    height: 100%;
+  }
+  table.hbar-graph tbody tr .value span
+  {
+    display: inline-block;
+    position: absolute;
+    width:        100%;
+    line-height: 1.5em;
+    height:      1.5em;
+    top:        -1.5em;
+    left:          0px;
+    overflow:   hidden;
+    text-indent:  99em;
+    text-align: center;
+  }
+  table.hbar-graph tbody tr:hover    .value span,
+  table.hbar-graph tbody tr:focus    .value span,
+  table.hbar-graph tbody tr:active   .value span,
+  table.hbar-graph tbody tr.selected .value span
+  {
+    overflow: visible;
+    text-indent:  0em;
+  }
+  table.hbar-graph tbody tr .scale
+  {
+    position: absolute;
+    line-height: 1.5em;
+    height:      1.5em;
+    top:        -1.5em;
+    overflow:   hidden;
+    text-indent:  99em;
+  }
+  table.hbar-graph tbody tr .label
+  {
+    position: absolute;
+    line-height: 1.5em;
+    height:      1.5em;
+    bottom:     -1.5em;
+    left:          0px;
+    text-align: center;
+  }
+
+  table.hbar-graph tfoot
+  {
+    display:     block;
+    position: absolute;
+    left:            0;
+    width:        100%;
+    top:           4em;
+    z-index:         1;
+  }
+  table.hbar-graph tfoot tr
+  {
+    position: relative;
+    display:     block;
+    float:       left;
+    width:       100%;
+    height:       25%; /* 20% */
+    font-size:    1em;
+    line-height:  1em;
+  }
+  table.hbar-graph tfoot tr .label
+  {
+    display:     block;
+    position: relative;
+    float:        left;
+    width:        100%;
+    height:        1em;
+    font-size:     1em;
+    line-height:   1em;
+    border:  solid 0px;
+    border-top-width: 1px;
+    /*left:         -.5%;
+    width:        101%;*/
+  }
+  table.hbar-graph tfoot tr.no-guide .label
+  {
+    border-top-color: white;
+  }
+  table.hbar-graph tfoot tr.yaxis2
+  {
+    height:       50%;
+  }
+  table.hbar-graph tfoot tr.yaxis3
+  {
+    height:       33.333%;
+  }
+
+  table.hbar-graph tfoot tr .label span
+  {
+    display: none;
+  }
+  table.hbar-graph tfoot tr .value
+  {
+    position: absolute;
+    right:      101%;
+    top:       -.5em;
+    height:      1em;
+    line-height: 1em;
+  }
+
+  table.hbar-graph tfoot tr .scale
+  {
+    display:      none;
+    position: absolute;
+    left:       101%;
+    top:       -.5em;
+    height:      1em;
+    line-height: 1em;
+  }
+
+  /* SIZE */
+
+  /* COLOR */
+  table.hbar-graph
+  {
+    font-family: "Helvetica Neue",Arial,Helvetica,sans-serif;
+    background-color: white;
+  }
+  table.hbar-graph thead th,
+  table.hbar-graph tbody th
+  {
+    background: none;
+    border:     none;
+  }
+  table.hbar-graph caption
+  {
+    border-radius: .5em .5em 0 0;
+    background-color: #c41230;
+    color: white;
+    font-size: 115%;
+  }
+  table.hbar-graph caption,
+  table.hbar-graph caption .title,
+  table.hbar-graph caption .total,
+  table.hbar-graph thead   .label,
+  table.hbar-graph thead   .value
+  {
+    font-weight: bold;
+  }
+  table.hbar-graph tbody tr
+  {
+    color: #666;
+  }
+  table.hbar-graph tbody tr:first-child
+  {
+    border-left-color: #DDF;
+  }
+  table.hbar-graph tbody tr:last-child
+  {
+    border-right-color: #DDF;
+  }
+  table.hbar-graph tbody tr:hover,
+  table.hbar-graph tbody tr:focus,
+  table.hbar-graph tbody tr:active,
+  table.hbar-graph tbody tr.selected
+  {
+    background-color: #F0F0F8;
+    color: #000;
+  }
+  table.hbar-graph tbody tr .scale
+  {
+    z-index: -1;
+    background-color: transparent;
+  }
+  table.hbar-graph tbody tr .value
+  {
+    background-color: #2b5781;
+  }
+  table.hbar-graph tbody tr:hover    .value,
+  table.hbar-graph tbody tr:focus    .value,
+  table.hbar-graph tbody tr:active   .value,
+  table.hbar-graph tbody tr.selected .value
+  {
+    background-color: #000000;
+  }
+  table.hbar-graph tbody tr .label
+  {
+    font-weight: normal;
+  }
+  table.hbar-graph tbody tr .label span
+  {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
+  }
+  table.hbar-graph tbody tr .label .ampm
+  {
+    display: inline-block;
+    position: absolute;
+    right:         0em;
+    bottom:       -1em;
+    color: #333;
+  }
+  table.hbar-graph tbody tr:hover    .label span,
+  table.hbar-graph tbody tr:focus    .label span,
+  table.hbar-graph tbody tr:active   .label span,
+  table.hbar-graph tbody tr.selected .label span
+  {
+    font-weight: normal;
+  }
+  table.hbar-graph tbody tr:hover    .label .ampm,
+  table.hbar-graph tbody tr:focus    .label .ampm,
+  table.hbar-graph tbody tr:active   .label .ampm,
+  table.hbar-graph tbody tr.selected .label .ampm
+  {
+    font-weight: normal;
+    color: #333;
+  }
+  table.hbar-graph tfoot tr .label
+  {
+    border-top-color: #DDF;
+  }
+  table.hbar-graph tfoot tr .value,
+  table.hbar-graph tfoot tr .scale
+  {
+    color: #333;
+  }
+
+  .selected-button,
+  div.datepicker_bootstrap .days .day.selected,
+  div.datepicker_bootstrap .days .day.selected:hover,
+  div.datepicker_bootstrap .months .month.selected,
+  div.datepicker_bootstrap .months .month.selected:hover,
+  div.datepicker_bootstrap .years .year.selected,
+  div.datepicker_bootstrap .years .year.selected:hover
+  {
+    background-color: #2b5781;
+  }
+
+#metricsForm{
+  text-align: left;
+}
+#metricsForm label{
+  display:inline;
+}
+.input-wrap
+{
+  display: inline-block;
+  position: relative;
+  padding: 0; margin: 0;
+  height: 2em;
+  width:  9em;
+  margin-right: 2em;
+}
+.input-wrap input.cal-date
+{
+  display: block;
+  text-align: center;
+  width: 7em;
+  margin-right: 0;
+  height: 17px; /*22px;*/
+  position: absolute; left:0px; top:0px;
+  border-radius: 4px 0px 0px 4px;
+  margin: 0.5em 0;
+  background-color: #fff;
+  border: 1px solid #bbb;
+  font-size: 1em;
+  vertical-align: text-bottom;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.input-wrap a.cal-toggle
+{
+  display: block;
+  padding: 0px; margin: 0px;
+  height: 19px; /*24px;*/
+  width:  2em;
+  position: absolute; right:-0.3em; top:0.5em;
+  cursor: pointer;
+  border: 1px solid #BBB;
+  border-left-width: 0px;
+  border-radius: 2px 4px 4px 2px;
+}
+.input-wrap a.cal-toggle .cal-icon
+{
+  display: block;
+  overflow: hidden;
+  text-indent: 100%;
+  height: 14px;
+  width:  12px;
+  position: absolute;
+  left: 50%; margin-left: -6px;
+  top:  50%; margin-top:  -8px;
+  background: url('calendar-icon.png') 0px 0px no-repeat;
+  cursor: pointer;
+}
+.input-wrap a.cal-toggle:hover  .cal-icon,
+.input-wrap a.cal-toggle:focus  .cal-icon,
+.input-wrap a.cal-toggle:active .cal-icon,
+.input-wrap a.cal-toggle.opened .cal-icon
+{
+  background-position: -12px 0px;
+}
+.input-wrap a.cal-toggle:focus,
+.input-wrap a.cal-toggle:active,
+.input-wrap a.cal-toggle.opened
+{
+  border-color: #666;
+  border-left-width:1px;
+}

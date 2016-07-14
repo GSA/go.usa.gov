@@ -1,0 +1,14 @@
+name = Go.gov
+description = Go.gov's default theme.
+package = Core
+version = VERSION
+core = 7.x
+
+stylesheets[all][] = css/style.css
+
+scripts[] = js/global.js
+
+regions[header_area] = Header
+regions[pre_content_area] = Pre Content Area 
+regions[content] = Content
+regions[footer_area] = Footer

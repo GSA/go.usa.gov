@@ -1,0 +1,797 @@
+<?php
+
+/** Implementation of the Go.USA shortUrl API
+ *
+ */
+define('203',  'Please provide a username');
+define('204',  'Please provide a domain name');
+define('205',  'Please provide a shortUrl');
+define('202',  'Please provide a longUrl');
+define('206',  'Please enter Login ID and API key');
+define('207',  'There was a problem posting your request. Please try again');
+define('208',  'Please specify the [type] argument. Example: type=popular, type=user or type=domain');
+define('1100', 'Please provide a Login ID');
+define('1101', 'Please provide a API Key');
+define('1102', 'Invalid Login ID');
+define('1105', 'Invalid API key');
+define('1106', 'The username entered is invalid');
+define('1203', 'No info available for requested document');
+define('1206', 'URL you tried to shorten was invalid');
+define('1207', 'URL you tried to shorten is not a government URL');
+define('1208', 'URL you entered is invalid');
+define('1209', 'URL you entered is not a government URL');
+define('1213', 'We could not find a long URL for that short URL');
+define('1214', 'URL you tried to shorten was already a short Go.USA.gov URL');
+define('1215', 'Too many requests from Login ID, please try again later');
+define('DEFAULT_RESULTS', 10);
+define('DEFAULT_DAYS',    45);
+
+/**
+ * implement hook_services_resources.
+ */
+function gousa_services_services_resources()
+{
+    return array(
+      'shorten' => array(
+         'index' => array(
+            'help'             => 'Shorten the long URL',
+            'callback'         => 'gousa_services_shorten_url',
+            'access arguments' => array('access content'),
+            'args'             => array(
+               array(
+                  'name'          => 'longUrl',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Return short url',
+                  'source'        => array('param' => 'longUrl'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'login',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Username',
+                  'source'        => array('param' => 'login'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'apiKey',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'validate apikey',
+                  'source'        => array('param' => 'apiKey'),
+                  'default value' => '',
+               ),
+            ),
+         ),
+      ),
+      'expand' => array(
+         'index' => array(
+            'help'             => 'Return the long URL for the corresponding short URL',
+            'callback'         => 'gousa_services_return_long_url',
+            'access arguments' => array('access content'),
+            'args'             => array(
+               array(
+                  'name'          => 'shortUrl',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Return long url',
+                  'source'        => array('param' => 'shortUrl'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'login',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Username',
+                  'source'        => array('param' => 'login'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'apiKey',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'validate apikey',
+                  'source'        => array('param' => 'apiKey'),
+                  'default value' => '',
+               ),
+            ),
+         ),
+      ),
+      'validate' => array(
+         'index' => array(
+            'help'             => 'Validate username and apikey',
+            'callback'         => 'gousa_services_validate',
+            'access arguments' => array('access content'),
+            'args'             => array(
+               array(
+                  'name'          => 'login',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'validate username',
+                  'source'        => array('param' => 'login'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'apiKey',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'validate apikey',
+                  'source'        => array('param' => 'apiKey'),
+                  'default value' => '',
+               ),
+            ),
+         ),
+      ),
+      'clicks' => array(
+         'index' => array(
+            'help'             => 'Extract data gathered by GO.USA.gov, particularly number of clicks',
+            'callback'         => 'gousa_services_clicks',
+            'access arguments' => array('access content'),
+            'args'             => array(
+               array(
+                  'name'          => 'shortUrl',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Short URL',
+                  'source'        => array('param' => 'shortUrl'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'login',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Username',
+                  'source'        => array('param' => 'login'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'apiKey',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'validate apikey',
+                  'source'        => array('param' => 'apiKey'),
+                  'default value' => '',
+               ),
+            ),
+         ),
+      ),
+      'export' => array(
+         'index' => array(
+            'help'             => 'Return lists of Go.USA.gov URLs and their associated information',
+            'callback'         => 'gousa_services_export',
+            'access arguments' => array('access content'),
+            'args'             => array(
+               array(
+                  'name'          => 'login',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Username',
+                  'source'        => array('param' => 'login'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'apiKey',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'validate apikey',
+                  'source'        => array('param' => 'apiKey'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'type',
+                  'type'          => 'string',
+                  'optional'      => false,
+                  'description'   => 'Type of URL',
+                  'source'        => array('param' => 'type'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'username',
+                  'type'          => 'string',
+                  'optional'      => true,
+                  'description'   => 'Username',
+                  'source'        => array('param' => 'username'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'days',
+                  'type'          => 'int',
+                  'optional'      => true,
+                  'description'   => 'Interval in days',
+                  'source'        => array('param' => 'days'),
+                  'default value' => '',
+               ),
+                array(
+                  'name'          => 'results',
+                  'type'          => 'int',
+                  'optional'      => true,
+                  'description'   => 'Number of records in the response',
+                  'source'        => array('param' => 'results'),
+                  'default value' => '',
+               ),
+               array(
+                  'name'          => 'domain',
+                  'type'          => 'string',
+                  'optional'      => true,
+                  'description'   => 'Domain name',
+                  'source'        => array('param' => 'domain'),
+                  'default value' => '',
+               ),
+            ),
+         ),
+      ),
+   );
+}
+
+// Shorten
+function gousa_services_shorten_url($longUrl = '', $login = '', $apiKey = '')
+{
+    _gousa_add_api_headers();
+
+    if (empty($longUrl)) {
+        return array('response' => array('errorCode' => '202', 'errorMessage' => constant('202'), 'statusCode' => 'ERROR'));
+    }
+    if (strlen($longUrl) > 2048) {
+        return array('response' => array('errorCode' => '1206', 'errorMessage' => constant('1206').'. Limit to 2048 characters.', 'statusCode' => 'ERROR'));
+    }
+    if (empty($login)) {
+        return array('response' => array('errorCode' => '1100', 'errorMessage' => constant('1100'), 'statusCode' => 'ERROR'));
+    }
+    if (empty($apiKey)) {
+        return array('response' => array('errorCode' => '1101', 'errorMessage' => constant('1101'), 'statusCode' => 'ERROR'));
+    }
+    if (!empty($login) && !empty($apiKey)) {
+        if (!_gousa_valid_login($login)) {
+            return array('response' => array('errorCode' => '1102', 'errorMessage' => constant('1102'), 'statusCode' => 'ERROR'));
+        }
+        if (!_gousa_valid_user($login, $apiKey)) {
+            return array('response' => array('errorCode' => '1105', 'errorMessage' => constant('1105'), 'statusCode' => 'ERROR'));
+        }
+        $p = shorten_parse_url($longUrl);
+        $r = shorten_url_allowed($longUrl);
+
+        if (!empty($longUrl) && $p['valid'] && !$r['allowed']) {
+            return array('response' => array('errorCode' => '1207', 'errorMessage' => constant('1207'), 'statusCode' => 'ERROR'));
+        }
+        if (!empty($longUrl) && !$p['valid']) {
+            return array('response' => array('errorCode' => '1206', 'errorMessage' => constant('1206'), 'statusCode' => 'ERROR'));
+        }
+
+        if (!empty($longUrl)) {
+            // throw $login into global['user'] ? probably a massive security violation
+            _gousa_set_active_user($login, $apiKey);
+            $cooldown = 5;
+            $shortUrl = shorten_url(url($longUrl, array('absolute' => true)),null,$cooldown);
+            if ( $shortUrl === null )
+            {
+                $entry[]  = array('short_url' => $shortUrl, 'long_url' => $longUrl);
+                return array('response' => array('errorCode' => '1215', 'errorMessage' => constant('1215'), 'statusCode' => 'ERROR'));
+            } else {
+                $status[] = array('status_code' => '200', 'status_txt' => 'OK');
+                $entry[]  = array('short_url' => $shortUrl, 'long_url' => $longUrl);
+                return array('response' => array($status, 'data' => array('entry' => $entry)));
+            }
+        } else {
+            return array('response' => array('errorCode' => '1207', 'errorMessage' => constant('1207'), 'statusCode' => 'ERROR'));
+        }
+    } else {
+        return array('response' => array('errorCode' => '206', 'errorMessage' => constant('206'), 'statusCode' => 'ERROR'));
+    }
+}
+
+// Expand
+function gousa_services_return_long_url($shortUrl = '', $login = '', $apiKey = '')
+{
+    _gousa_add_api_headers();
+
+    if (empty($login) || $login == ' ') {
+        return array('response' => array('errorCode' => '1100', 'errorMessage' => constant('1100'), 'statusCode' => 'ERROR'));
+    }
+    if (empty($apiKey)) {
+        return array('response' => array('errorCode' => '1101', 'errorMessage' => constant('1101'), 'statusCode' => 'ERROR'));
+    }
+    if (!empty($login) && !empty($apiKey)) {
+        if (empty($shortUrl)) {
+            return array('response' => array('errorCode' => '205', 'errorMessage' => constant('205'), 'statusCode' => 'ERROR'));
+        }
+        if (!_gousa_valid_login($login)) {
+            return array('response' => array('errorCode' => '1102', 'errorMessage' => constant('1102'), 'statusCode' => 'ERROR'));
+        }
+        if (!_gousa_valid_user($login, $apiKey)) {
+            return array('response' => array('errorCode' => '1105', 'errorMessage' => constant('1105'), 'statusCode' => 'ERROR'));
+        }
+        $query_string = $_SERVER['QUERY_STRING'];
+        $args         = explode('&shortUrl=', urldecode($query_string));
+        $size_of_args = sizeof($args);
+        $status[]     = array('status_code' => '200', 'status_txt' => 'OK');
+        if ($size_of_args > 2) {
+            for ($i = 1; $i < $size_of_args; ++$i) {
+                if (_gousa_valid_shorturl($args[$i])) {
+                    $longUrl = '';
+                    $key     = explode('/', $args[$i]);
+                    $url_key = array_pop($key);
+                    $sql     = 'SELECT DISTINCT orig_url FROM {shorturl_link} WHERE lid = :lid';
+                    if (strlen($url_key) > 3) {
+                        $result = db_query($sql, array(':lid' => shorturl_decode_url($url_key)));
+                    } else {
+                        $result = db_query($sql, array(':lid' => shorturl_decode_url_custom($url_key)));
+                    }
+                    foreach ($result as $obj) {
+                        $longUrl = $obj->orig_url;
+                    }
+
+                    if (empty($longUrl)) {
+                        $longUrl = 'No long URL found for this short URL.';
+                    }
+                    $entry[] = array('short_url' => url($url_key, array('absolute' => true)), 'long_url' => $longUrl);
+                } else {
+                    $entry[] = array('short_url' => url($url_key, array('absolute' => true)), 'long_url' => 'No long URL found');
+                }
+            }
+        } else {
+            if (_gousa_valid_shorturl($shortUrl)) {
+                $key     = explode('/', $shortUrl);
+                $url_key = array_pop($key);
+                $sql     = 'SELECT DISTINCT orig_url FROM {shorturl_link} WHERE lid = :lid';
+                if (strlen($url_key) > 3) {
+                    $result = db_query($sql, array(':lid' => shorturl_decode_url($url_key)));
+                } else {
+                    $result = db_query($sql, array(':lid' => shorturl_decode_url_custom($url_key)));
+                }
+                foreach ($result as $obj) {
+                    $longUrl = $obj->orig_url;
+                }
+
+                if (empty($longUrl)) {
+                    return array('response' => array('errorCode' => '1213', 'errorMessage' => constant('1213'), 'statusCode' => 'ERROR'));
+                }
+                $entry[] = array('short_url' => url($url_key, array('absolute' => true)), 'long_url' => $longUrl);
+            } else {
+                return array('response' => array('errorCode' => '1208', 'errorMessage' => constant('1208'), 'statusCode' => 'ERROR'));
+            }
+        }
+
+        return array('response' => array($status, 'data' => array('entry' => $entry)));
+    } else {
+        return array('response' => array('errorCode' => '206', 'errorMessage' => constant('206'), 'statusCode' => 'ERROR'));
+    }
+}
+
+// Validate
+function gousa_services_validate($login = '', $apiKey = '')
+{
+    _gousa_add_api_headers();
+
+    if (empty($login)) {
+        return array('response' => array('errorCode' => '1100', 'errorMessage' => constant('1100'), 'statusCode' => 'ERROR'));
+    }
+    if (empty($apiKey)) {
+        return array('response' => array('errorCode' => '1101', 'errorMessage' => constant('1101'), 'statusCode' => 'ERROR'));
+    }
+    if (!empty($login) && !empty($apiKey)) {
+        if (!_gousa_valid_login($login)) {
+            return array('response' => array('errorCode' => '1102', 'errorMessage' => constant('1102'), 'statusCode' => 'ERROR'));
+        }
+        if (!_gousa_valid_user($login, $apiKey)) {
+            return array('response' => array('errorCode' => '1105', 'errorMessage' => constant('1105'), 'statusCode' => 'ERROR'));
+        }
+
+        return array('response' => array('status_code' => '200', 'status_txt' => 'OK', 'valid' => '1'));
+    } else {
+        return array('response' => array('errorCode' => '206', 'errorMessage' => constant('206'), 'statusCode' => 'ERROR'));
+    }
+}
+
+// Clicks
+function gousa_services_clicks($shortUrl = '', $login = '', $apiKey = '')
+{
+    _gousa_add_api_headers();
+
+    if (empty($login)) {
+        return array('response' => array('errorCode' => '1100', 'errorMessage' => constant('1100'), 'statusCode' => 'ERROR'));
+    }
+    if (empty($apiKey)) {
+        return array('response' => array('errorCode' => '1101', 'errorMessage' => constant('1101'), 'statusCode' => 'ERROR'));
+    }
+    if (!empty($login) && !empty($apiKey)) {
+        if (empty($shortUrl)) {
+            return array('response' => array('errorCode' => '205', 'errorMessage' => constant('205'), 'statusCode' => 'ERROR'));
+        }
+        if (!_gousa_valid_login($login)) {
+            return array('response' => array('errorCode' => '1102', 'errorMessage' => constant('1102'), 'statusCode' => 'ERROR'));
+        }
+        if (!_gousa_valid_user($login, $apiKey)) {
+            return array('response' => array('errorCode' => '1105', 'errorMessage' => constant('1105'), 'statusCode' => 'ERROR'));
+        }
+        $query_string = $_SERVER['QUERY_STRING'];
+        $args         = explode('&shortUrl=', urldecode($query_string));
+        $size_of_args = sizeof($args);
+        $status[]     = array('status_code' => '200', 'status_txt' => 'OK');
+        if ($size_of_args > 2) {
+            for ($i = 1; $i < $size_of_args; ++$i) {
+                if (_gousa_valid_shorturl($args[$i])) {
+                    $key     = explode('/', $args[$i]);
+                    $url_key = array_pop($key);
+                    $sql     = 'SELECT clicks FROM {shorturl_link} WHERE lid = :lid';
+                    if (strlen($url_key) > 3) {
+                        $result = db_query($sql, array(':lid' => shorturl_decode_url($url_key)))->fetchField();
+                    } else {
+                        $result = db_query($sql, array(':lid' => shorturl_decode_url_custom($url_key)))->fetchField();
+                    }
+                    if ($result == null) {
+                        return array('response' => array('errorCode' => '1213', 'errorMessage' => constant('1213'), 'statusCode' => 'ERROR'));
+                    }
+                    $entry[] = array('short_url' => url($url_key, array('absolute' => true)), 'user_clicks' => $result);
+                } else {
+                    return array('response' => array('errorCode' => '1208', 'errorMessage' => constant('1208'), 'statusCode' => 'ERROR'));
+                }
+            }
+        } else {
+            if (_gousa_valid_shorturl($shortUrl)) {
+                $key     = explode('/', $shortUrl);
+                $url_key = array_pop($key);
+                $sql     = 'SELECT clicks FROM {shorturl_link} WHERE lid = :lid';
+                if (strlen($url_key) > 3) {
+                    $result = db_query($sql, array(':lid' => shorturl_decode_url($url_key)))->fetchField();
+                } else {
+                    $u_lid  = shorturl_decode_url_custom($url_key);
+                    $result = db_query($sql, array(':lid' => shorturl_decode_url_custom($url_key)))->fetchField();
+                }
+                if ($result == null) {
+                    return array('response' => array('errorCode' => '1213', 'errorMessage' => constant('1213'), 'statusCode' => 'ERROR'));
+                }
+                $entry[] = array('short_url' => url($url_key, array('absolute' => true)), 'user_clicks' => $result);
+            } else {
+                return array('response' => array('errorCode' => '1208', 'errorMessage' => constant('1208'), 'statusCode' => 'ERROR'));
+            }
+        }
+
+        return array('response' => array($status, 'data' => array('entry' => $entry)));
+    } else {
+        return array('response' => array('errorCode' => '206', 'errorMessage' => constant('206'), 'statusCode' => 'ERROR'));
+    }
+}
+
+// Export
+function gousa_services_export($login = '', $apiKey = '', $type = '', $username = '', $days = '', $results = '', $domain = '')
+{
+    _gousa_add_api_headers();
+
+    $sees_notes = false;
+    if (empty($login)) {
+        return array('response' => array('errorCode' => '1100', 'errorMessage' => constant('1100'), 'statusCode' => 'ERROR'));
+    }
+    if (empty($apiKey)) {
+        return array('response' => array('errorCode' => '1101', 'errorMessage' => constant('1101'), 'statusCode' => 'ERROR'));
+    }
+    if (!_gousa_valid_login($login)) {
+        return array('response' => array('errorCode' => '1102', 'errorMessage' => constant('1102'), 'statusCode' => 'ERROR'));
+    }
+    if (!_gousa_valid_user($login, $apiKey)) {
+        return array('response' => array('errorCode' => '1105', 'errorMessage' => constant('1105'), 'statusCode' => 'ERROR'));
+    }
+    $status[] = array('status_code' => '200', 'status_txt' => 'OK');
+    switch ($type) {
+        case 'popular':
+            if (empty($days)) {
+                $days = constant('DEFAULT_DAYS');
+            }
+            if (empty($results)) {
+                $results = constant('DEFAULT_RESULTS');
+            }
+            try {
+                $sql    = 'SELECT lid, orig_url, created, title, description, keywords, clicks FROM {shorturl_link} WHERE DATE_SUB(CURDATE(),INTERVAL '.intval($days).' DAY) <= DATE(FROM_UNIXTIME(created)) ORDER BY clicks DESC LIMIT '.intval($results);
+                $result = db_query($sql);
+            } catch (Excpetion $e) {
+                return array('response' => array('errorCode' => '1203', 'errorMessage' => constant('1203'), 'statusCode' => 'ERROR'));
+            }
+            break;
+        case 'user':
+            if (empty($username)) {
+                return array('response' => array('errorCode' => '203', 'errorMessage' => constant('203'), 'statusCode' => 'ERROR'));
+            }
+            if (empty($days)) {
+                $days = constant('DEFAULT_DAYS');
+            }
+            if (empty($results)) {
+                $results = constant('DEFAULT_RESULTS');
+            }
+            $sees_notes = ($username == $login);
+            try {
+                $res = db_query('SELECT COUNT(uid) FROM users WHERE name = :username', array(':username' => $username))->fetchField();
+                if ($res) {
+                    $sql    = 'SELECT sl.lid, sl.orig_url, sl.created, sl.title, sl.description, sl.keywords, sl.clicks, sl.notes FROM {shorturl_link} as sl, {users} as u WHERE sl.uid = u.uid AND u.name = :username AND DATE_SUB(CURDATE(),INTERVAL '.intval($days).' DAY) <= DATE(FROM_UNIXTIME(sl.created)) ORDER BY clicks DESC LIMIT '.intval($results);
+                    $params = array(':username' => $username);
+                    $result = db_query($sql, $params);
+                } else {
+                    return array('response' => array('errorCode' => '1106', 'errorMessage' => constant('1106'), 'statusCode' => 'ERROR'));
+                }
+            } catch (Excpetion $e) {
+                return array('response' => array('errorCode' => '1106', 'errorMessage' => constant('1106'), 'statusCode' => 'ERROR'));
+            }
+            break;
+        case 'domain':
+            if (empty($domain)) {
+                return array('response' => array('errorCode' => '204', 'errorMessage' => constant('204'), 'statusCode' => 'ERROR'));
+            }
+            if (empty($days)) {
+                $days = constant('DEFAULT_DAYS');
+            }
+            if (empty($results)) {
+                $results = constant('DEFAULT_RESULTS');
+            }
+            try {
+                $domain = '%'.db_like(urldecode($domain)).'%';
+                $sql    = 'SELECT lid, orig_url, created, title, description, keywords, clicks FROM {shorturl_link} WHERE orig_url LIKE :domain AND DATE_SUB(CURDATE(),INTERVAL '.intval($days).' DAY) <= DATE(FROM_UNIXTIME(created)) ORDER BY clicks DESC LIMIT '.intval($results);
+                $params = array(':domain' => $domain);
+                $result = db_query($sql, $params);
+            } catch (Excpetion $e) {
+                return array('response' => array('errorCode' => '1203', 'errorMessage' => constant('1203'), 'statusCode' => 'ERROR'));
+            }
+            break;
+        default:
+            $params    = array(':login' => $login);
+            $and_where = '';
+            $limit     = '';
+            if (!empty($days)) {
+                $and_where = ' AND DATE_SUB(CURDATE(),INTERVAL '.intval($days).' DAY) <= DATE(FROM_UNIXTIME(sl.created)) ';
+            }
+            if (!empty($results)) {
+                $limit = ' LIMIT '.intval($results);
+            }
+            $sees_notes = true;
+            try {
+                $res = db_query('SELECT COUNT(uid) FROM users WHERE name = :login', $params)->fetchField();
+                if ($res) {
+                    $sql    = "SELECT sl.lid, sl.orig_url, sl.created, sl.title, sl.description, sl.keywords, sl.clicks, sl.notes FROM {shorturl_link} as sl, {users} as u WHERE sl.uid = u.uid AND u.name = :login {$and_where} ORDER BY sl.created DESC {$limit}";
+                    $result = db_query($sql, $params);
+                } else {
+                    return array('response' => array('errorCode' => '1203', 'errorMessage' => constant('1203'), 'statusCode' => 'ERROR'));
+                }
+            } catch (Excpetion $e) {
+                return array('response' => array('errorCode' => '1203', 'errorMessage' => constant('1203'), 'statusCode' => 'ERROR'));
+            }
+    }
+    if ($result) {
+        foreach ($result as $obj) {
+            $shortUrl       = url(shorturl_encode_url($obj->lid), array('absolute' => true));
+            $longUrl        = $obj->orig_url;
+            $dateCreated    = date('Y-m-d', $obj->created);
+            $URLtitle       = $obj->title;
+            $URLdescription = $obj->description;
+            $URLkeywords    = $obj->keywords;
+            $user_clicks    = $obj->clicks;
+            $item           = array('shortUrl' => $shortUrl, 'longUrl' => $longUrl, 'dateCreated' => $dateCreated, 'URLtitle' => $URLtitle, 'URLdescription' => $URLdescription, 'URLkeywords' => $URLkeywords, 'user_clicks' => $user_clicks);
+            if ($sees_notes) {
+                $item['notes'] = $obj->notes;
+            }
+            $data[] = $item;
+        }
+    } else {
+        return array('response' => array('errorCode' => '207', 'errorMessage' => constant('207'), 'statusCode' => 'ERROR'));
+    }
+
+    return array('response' => array('status' => $status, 'data' => $data));
+    //    return array('response' => array('errorCode' => '208', 'errorMessage' => constant("208"), 'statusCode' => 'ERROR'));
+    //    return array('response' => array('errorCode' => '206', 'errorMessage' => constant("206"), 'statusCode' => 'ERROR'));
+}
+
+function _gousa_add_api_headers()
+{
+    drupal_add_http_header('Access-Control-Allow-Origin','*');
+    drupal_add_http_header('Access-Control-Allow-Methods','POST, GET, OPTIONS');
+}
+
+function _gousa_set_active_user($login = '', $apiKey = '')
+{
+    try {
+        $uid = db_query('SELECT uid FROM {users} WHERE name = :login AND data LIKE :apiKey LIMIT 1',
+                    array(':login'  => $login,
+                          ':apiKey' => '%s:6:"apiKey";s:'.strlen($apiKey).':"'.db_like($apiKey).'";%',
+                    ))->fetchField();
+
+        if (!empty($uid)) {
+            $user = user_load($uid);
+            if (!empty($user)) {
+                $GLOBALS['user'] = $user;
+            }
+
+            return true;
+        }
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+function _gousa_valid_user($login = '', $apiKey = '')
+{
+    try {
+        $result = db_query('SELECT count(uid) FROM {users} WHERE name = :login AND data LIKE :apiKey',
+                    array(':login'  => $login,
+                          ':apiKey' => '%s:6:"apiKey";s:'.strlen($apiKey).':"'.db_like($apiKey).'";%',
+                    ))->fetchField();
+
+        return !empty($result);
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+function _gousa_valid_login($login = '')
+{
+    try {
+        $result = db_query('SELECT COUNT(uid) FROM {users} WHERE name = :login',
+                    array(':login' => $login)
+                  )->fetchField();
+
+        return !empty($result);
+    } catch (Exception $e) {
+        return false;
+    }
+    // $sql = "SELECT COUNT(uid) FROM {users} WHERE name LIKE :login";
+    // //$res = db_result(db_query($sql, $login));
+    // $res = db_query($sql, array(':login'=>$login))->fetchField();
+    // if ($res)
+    // {
+    //     return TRUE;
+    // } else {
+    //     return FALSE;
+    // }
+}
+
+function _gousa_valid_shorturl($url)
+{
+    if (function_exists('shorten_parse_url')) {
+        $p  = shorten_parse_url($url);
+        $pl = strlen($p['path']);
+        if ($pl > 0) {
+            return $pl <= 15;
+        }
+    }
+    $ul = strlen($url);
+
+    return $ul > 0 && $ul <= 15;
+    // global $base_url;
+    // if ( $u['host'] === $base_url ) { }
+    // if ( $u['path'] looks like a token has only one / and contains only token chars
+    // dont bother considering fragments as part of the shorturl
+}
+
+
+
+
+// implementation of hook_autoload_info()
+// function gousa_services_autoload_info()
+// {
+//     return array(
+//       // custom CSV response formatter
+//       'RESTServerViewCSV' => array(
+//          'file' => 'gousa_services.views.inc',
+//       ),
+//        // custom TXT response formatter
+//       'RESTServerViewTXT' => array(
+//          'file' => 'gousa_services.views.inc',
+//       ),
+//    );
+// }
+
+function gousa_services_rest_server_response_formatters_alter(&$formatters)
+{
+    #error_log(print_r($formatters,true));
+    $formatters['csv'] = array(
+        'mime types' => array('text/plain'),
+        'formatter class' => 'GoUsaServicesCSVFormatter',
+    );
+    $formatters['txt'] = array(
+        'mime types' => array('text/plain'),
+        'formatter class' => 'GoUsaServicesTXTFormatter',
+    );
+    return $formatters;
+}
+
+
+class GoUsaServicesCSVFormatter implements ServicesFormatterInterface
+{
+    public function render($response)
+    {
+        if ( empty($response['response']) || empty($response['response']['data']) )
+        {
+            return '';
+        }
+        $stream = fopen('php://memory', 'r+');
+
+        /// write out headers based on first object's parameters
+        /// reset gets us the first, and nicely preps foreach loop
+        if ( isset($response['response']['data']) &&
+             is_array($response['response']['data']) )
+        {
+            if ( isset($response['response']['data']['entry']) &&
+                 is_array($response['response']['data']['entry']) )
+            {
+                $data = $response['response']['data']['entry'];
+            } else {
+                $data = $response['response']['data'];
+            }
+        } else {
+            return '';
+        }
+        fputcsv($stream, array_keys((array) reset($data)));
+
+        /// write out each item as a csv line
+        foreach ($data as $item) {
+            fputcsv($stream, (array) $item);
+        }
+
+        /// be sure to get from the beginning of stream
+        rewind($stream);
+        $out = stream_get_contents($stream);
+        fclose($stream);
+
+        return $out;
+
+    }
+}
+
+class GoUsaServicesTXTFormatter implements ServicesFormatterInterface
+{
+    public function render($response)
+    {
+        if ( empty($response['response']) || empty($response['response']['data']) )
+        {
+            return '';
+        }
+        $txt = '';
+        foreach ($response['response']['data'] as $row)
+        {
+            // enclose rows with double quotes
+            $simple_txt = '';
+            //return print_r($row);
+            if (is_array($row))
+            {
+                foreach ($row as $item)
+                {
+                    if(is_array($item))
+                    {
+                        foreach ($item as $record)
+                        {
+                            if (is_array($record))
+                            {
+                                $count = 0;
+                                foreach ($record as $rec)
+                                {
+                                    if(is_array($rec))
+                                    {
+                                        foreach($rec as $data)
+                                        {
+                                            $simple_txt .= trim($data) . " ";
+                                        }
+                                    }
+                                    $simple_txt .= trim($rec) . " ";
+                                    if ($rec == 'OK')
+                                    {
+                                        $count = 0;
+                                        $simple_txt .= PHP_EOL;
+                                    }
+                                    $count++;
+                                    if ($count == 7)
+                                    {
+                                        $simple_txt .= PHP_EOL;
+                                    }
+                                }
+                            } else {
+                                $simple_txt .= trim($record). " ";
+                            }
+                        }
+                    } else {
+                        $simple_txt .= trim($item). " ";
+                    }
+                }
+            } else {
+                $simple_txt .= trim($row). " ";
+            }
+            $txt .= substr($simple_txt, 0, -1);
+        }
+        return $txt;
+    }
+}

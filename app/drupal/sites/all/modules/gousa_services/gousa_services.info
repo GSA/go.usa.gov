@@ -1,0 +1,7 @@
+name = Go USA Services API
+description = Provides an API for Go USA services.
+files[] = gousa_services.views.inc
+dependencies[] = rest_server
+dependencies[] = shorten
+package = Services
+core = 7.x

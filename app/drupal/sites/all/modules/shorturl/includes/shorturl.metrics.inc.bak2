@@ -1,0 +1,586 @@
+<?php
+
+function shorturl_metrics_cron()
+{
+    shorturl_metrics_create_monthly_tables();
+    shorturl_metrics_create_monthly_tables(strtotime('next month'));
+}
+function shorturl_metrics_create_monthly_tables($when = null)
+{
+    if (empty($when)) {
+        $when = time();
+    }
+
+    $metric_db = _shorturl_metrics_db_name();
+
+    $metric_month = date('Y_m', $when);
+    $metric_year  = date('Y',   $when);
+
+    $month_table_name = "{$metric_db}.shorturl_metric_link_{$metric_year}_month";
+    $day_table_name   = "{$metric_db}.shorturl_metric_link_{$metric_month}_day";
+    $hour_table_name  = "{$metric_db}.shorturl_metric_link_{$metric_month}_hour";
+
+    $month_table = array(
+       'fields' => array(
+           'month'  => array('type' => 'varchar', 'mysql_type' => 'datetime', 'not null' => true),
+           'lid'    => array('type' => 'int', 'unsigned' => true, 'not null' => true),
+           'clicks' => array('type' => 'int', 'unsigned' => true, 'not null' => false, 'default' => 0),
+       ),
+       'primary key' => array('month', 'lid'),
+   );
+    $day_table = array(
+       'fields' => array(
+           'day'    => array('type' => 'varchar', 'mysql_type' => 'datetime', 'not null' => true),
+           'lid'    => array('type' => 'int', 'unsigned' => true, 'not null' => true),
+           'clicks' => array('type' => 'int', 'unsigned' => true, 'not null' => false, 'default' => 0),
+       ),
+       'primary key' => array('day', 'lid'),
+   );
+    $hour_table = array(
+       'fields' => array(
+           'hour'   => array('type' => 'varchar', 'mysql_type' => 'datetime', 'not null' => true),
+           'lid'    => array('type' => 'int', 'unsigned' => true, 'not null' => true),
+           'clicks' => array('type' => 'int', 'unsigned' => true, 'not null' => false, 'default' => 0),
+       ),
+       'primary key' => array('hour', 'lid'),
+   );
+    /// these are ok to fail - we want to be able to run them without problems even if tables already exists
+    try {
+        @db_create_table($month_table_name, $month_table);
+    } catch (Exception $e) { /*pass*/
+    }
+    try {
+        @db_create_table($day_table_name,   $day_table);
+    } catch (Exception $e) { /*pass*/
+    }
+    try {
+        @db_create_table($hour_table_name,  $hour_table);
+    } catch (Exception $e) { /*pass*/
+    }
+
+    return true;
+}
+
+function shorturl_shorturl_clickthrough($click)
+{
+    if (variable_get('shorturl_track_clicks', 1) && !shorturl_metrics_is_bot($click['browser'])) {
+        $transaction = db_transaction();
+
+        try {
+            @db_query('UPDATE {shorturl_link} SET clicks = clicks + 1 WHERE lid = :lid', array(':lid' => $click['lid']));
+        } catch (Exception $e) {
+            watchdog('shorturl', 'Error updating shorturl_link count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+        }
+
+        db_set_active('metrics');
+
+        try {
+            @db_query('INSERT INTO {shorturl_metric_referrer}      (refmd5,referrer,clicks)     VALUES (MD5(:ref),:ref,1)      ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':ref' => $click['referrer']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_referrer count, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%ref' => $click['referrer']), WATCHDOG_ERROR);
+        }
+        try {
+            @db_query('INSERT INTO {shorturl_metric_domain}        (domain,clicks)              VALUES (:dom,1)                ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':dom' => $click['domain']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_domain count, token(%token) lid(%lid) orig_url(%orig_url) domain(%dom)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%dom' => $click['domain']), WATCHDOG_ERROR);
+        }
+        try {
+            @db_query('INSERT INTO {shorturl_metric_destination}   (destmd5,destination,clicks) VALUES (MD5(:url),:url,1)      ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':url' => $click['orig_url']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_destination count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+        }
+        try {
+            @db_query('INSERT INTO {shorturl_metric_link_referrer} (lid,refmd5,referrer,clicks) VALUES (:lid,MD5(:ref),:ref,1) ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':lid' => $click['lid'], ':ref' => $click['referrer']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_referrer count, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%ref' => $click['referrer']), WATCHDOG_ERROR);
+        }
+        try {
+            @db_query('INSERT INTO {shorturl_metric_link_domain}   (lid,domain,clicks)          VALUES (:lid,:dom,1)           ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':lid' => $click['lid'], ':dom' => $click['domain']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_domain count, token(%token) lid(%lid) orig_url(%orig_url) domain(%dom)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%dom' => $click['domain']), WATCHDOG_ERROR);
+        }
+
+        $metric_month = date('Y_m');
+        $metric_year  = date('Y');
+
+        db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
+
+        try {
+            $rm = @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_{$metric_year}_month count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+        }
+        try {
+            $rd = @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_day}  (day,  lid,clicks) VALUES (date_format(now(),'%Y-%m-%d 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_{$metric_month}_day count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+        }
+        try {
+            $rh = @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_hour} (hour, lid,clicks) VALUES (date_format(now(),'%Y-%m-%d %H:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_{$metric_month}_hour count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+        }
+
+        /// if we got any error, assume cron didn't update tables for us and try to do so here, then rerun inserts
+        if (!($rm && $rd && $rh)) {
+            shorturl_metrics_cron(); /// creates missing tables
+            db_set_active('metrics');
+            /// retry any failed inserts
+            if (!$rm) {
+                try {
+                    @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                } catch (Exception $e) {
+                    watchdog_exception('shorturl', $e, 'Error retrying updating shorturl_metric_link_{$metric_year}_month count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+                }
+            }
+            if (!$rd) {
+                try {
+                    @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_day}  (day,  lid,clicks) VALUES (date_format(now(),'%Y-%m-%d 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                } catch (Exception $e) {
+                    watchdog_exception('shorturl', $e, 'Error retryingupdating shorturl_metric_link_{$metric_month}_day count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+                }
+            }
+            if (!$rh) {
+                try {
+                    @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_hour} (hour, lid,clicks) VALUES (date_format(now(),'%Y-%m-%d %H:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                } catch (Exception $e) {
+                    watchdog_exception('shorturl', $e, 'Error retrying updating shorturl_metric_link_{$metric_month}_hour count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $token, '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
+                }
+            }
+        }
+
+        db_set_active();
+    }
+    drupal_goto($click['orig_url'], array(), 301);
+    exit();
+}
+
+function shorturl_metrics_is_bot($user_agent)
+{
+    $bot_list = array(
+    'google' => array(
+         '/(Googlebot|AdsBot-Google|Mediapartners-Google)/i',
+    ),
+    'yahoo' => array(
+        '/Yahoo!( Slurp|-AdCrawler)/i',
+    ),
+    'bing' => array(
+        '/(BingPreview|msnbot|bingbot)/i',
+    ),
+    'ask' => array(
+         '/Ask Jeeves/i',
+    ),
+    'lycos' => array(
+         '/Lycos\/x.x/i',
+    ),
+    'generic' => array(
+         '/(spider|crawl(ing|er)?|bot[\W\b])/i',
+    ),
+  );
+    foreach ($bot_list as $bot => $bot_agents) {
+        foreach ($bot_agents as $bot_agent) {
+            if (empty($bot_agent)) {
+                continue;
+            }
+            if ($bot_agent{0} == '/') {
+                if (preg_match($bot_agent, $user_agent)) {
+                    return true;
+                }
+            } elseif ($bot_agent == $user_agent) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function shorturl_metrics_data_by_hour($lid, $fromDate, $toDate)
+{
+    $metric_db    = _shorturl_metrics_db_name();
+    $metric_table = "{$metric_db}.shorturl_metric_link_".date('Y_m', $fromDate).'_hour';
+    $fromTime     = date('Y-m-d 00:00:00', $fromDate);
+    $toTime       = date('Y-m-d 23:59:59', $fromDate);
+    try {
+        $results = db_query("SELECT * FROM {$metric_table} WHERE lid=:lid AND hour BETWEEN :fromtime AND :totime ORDER BY hour", array(
+          ':lid'      => $lid,
+          ':fromtime' => $fromTime,
+          ':totime'   => $toTime,
+        ));
+    } catch (Exception $e) {
+        watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by hour from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+        return array(
+            'bucket' => 'hour',
+            'max'    => 0,
+            'sum'    => 0,
+            'data'   => array(),
+        );
+    }
+    $data = array();
+    for ($h = 0; $h < 24; ++$h) {
+        $hh        = str_pad($h, 2, '0', STR_PAD_LEFT);
+        $data[$hh] = array('label' => $hh, 'clicks' => 0);
+    }
+    $max = 0;
+    $sum = 0;
+    foreach ($results as $row) {
+        $clicks                    = intval($row->clicks);
+        $rowTime                   = strtotime($row->hour);
+        $data[date('H', $rowTime)] = array('label' => date('G', $rowTime), 'clicks' => $clicks);
+        if ($clicks > $max) {
+            $max = $clicks;
+        }
+        $sum += $clicks;
+    }
+
+    return array(
+        'bucket' => 'hour',
+        'max'    => $max,
+        'sum'    => $sum,
+        'data'   => $data,
+    );
+}
+
+function shorturl_metrics_data_by_day($lid, $fromDate, $toDate)
+{
+    $day_span = max(0, ($toDate - $fromDate) / 86400) + 1;
+
+    $metric_db = _shorturl_metrics_db_name();
+    $fromMonth = date('F', $fromDate);
+    $toMonth   = date('F', $toDate);
+    $fromTime  = date('Y-m-d 00:00:00', $fromDate);
+    $toTime    = date('Y-m-d 23:59:59', $toDate);
+    $months    = array();
+    for ($d = 0; $d < $day_span; ++$d) {
+        $months[date('Y_m', strtotime("+{$d} days", $fromDate))] = true;
+    }
+    if (count($months) == 1) {
+        $metric_table = "{$metric_db}.shorturl_metric_link_".date('Y_m', $fromDate).'_day';
+        try {
+            $results = db_query("
+				SELECT * FROM {$metric_table} WHERE lid=:lid AND day BETWEEN :fromtime AND :totime ORDER BY day
+			", array(
+                ':lid' => $lid, ':fromtime' => $fromTime, ':totime' => $toTime,
+            ));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by day from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'day',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    } else {
+        $query  = array();
+        $params = array();
+        foreach ($months as $Y_m => $dontcare) {
+            $metric_table             = "{$metric_db}.shorturl_metric_link_{$Y_m}_day";
+            $query[]                  = "( SELECT * FROM {$metric_table} WHERE lid=:lid{$Y_m} AND day BETWEEN :fromtime{$Y_m} AND :totime{$Y_m} ORDER BY day )";
+            $params[':lid'.$Y_m]      = $lid;
+            $params[':fromtime'.$Y_m] = $fromTime;
+            $params[':totime'.$Y_m]   = $toTime;
+        }
+        try {
+            $results = db_query(implode(' UNION ', $query), $params);
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by day from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'day',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    }
+    $data = array();
+    for ($d = 0; $d < $day_span; ++$d) {
+        $rowTime                     = strtotime("+{$d} days", $fromDate);
+        $data[date('Ymd', $rowTime)] = array('label' => date('j', $rowTime), 'clicks' => 0);
+    }
+    $max = 0;
+    $sum = 0;
+    foreach ($results as $row) {
+        $clicks                      = intval($row->clicks);
+        $rowTime                     = strtotime($row->day);
+        $data[date('Ymd', $rowTime)] = array('label' => date('j', $rowTime), 'clicks' => $clicks);
+        if ($clicks > $max) {
+            $max = $clicks;
+        }
+        $sum += $clicks;
+    }
+
+    return array(
+        'bucket' => 'day',
+        'max'    => $max,
+        'sum'    => $sum,
+        'data'   => $data,
+    );
+}
+
+function shorturl_metrics_data_by_week($lid, $fromDate, $toDate)
+{
+    /// WEEKS MUST START ON A SUNDAY TO MATCH CALENDAR UI
+    $day_span  = max(0, ($toDate - $fromDate) / 86400) + 1;
+
+    $metric_db = _shorturl_metrics_db_name();
+    $fromMonth = date('F', $fromDate);
+    $toMonth   = date('F', $toDate);
+    $fromTime  = date('Y-m-d 00:00:00', $fromDate);
+    $toTime    = date('Y-m-d 00:00:00', $toDate);
+    /// for week calculation (because php uses ISO-8601) we must make sunday give
+    /// the same week as the next monday, so we just add a day for calculation
+    $fromWeek  = (intval(strtotime('N', $fromDate))==7) ? $fromDate+86400 : $fromDate;
+
+    $monthspan = array();
+    $data      = array();
+
+    /// initialize buckets to empty
+    for ($d = 0; $d < $day_span; $d++ )
+    {
+        $dayTime   = strtotime('+'.$d.' days', $fromWeek);
+        $yyyyww    = date('oW', $dayTime);
+        if ( isset($data[$yyyyww]) ) { continue; }
+
+        $yyyy      = substr($yyyyww, 0, 4);
+        $ww        = substr($yyyyww, 4, 2)-1;
+        $weekStart = strtotime("{$yyyy}-01-01 +{$ww} weeks");
+        if (intval(date('N', $weekStart)) < 7 ) {
+            $weekStart = strtotime('last sunday', $weekStart);
+        }
+        $data[$yyyyww] = array('label' => date('n/j', $weekStart), 'clicks' => 0);
+        $monthspan[ date('Y_m', $weekStart) ] = true;
+    }
+
+    if (count($monthspan) == 1) {
+        /// YEARWEEK(~,3) to match monday first, YEARWEEK(~,4) to match sunday first
+        $metric_table = "{$metric_db}.shorturl_metric_link_".date('Y_m', $fromDate).'_day';
+        try {
+            $results = db_query("
+			  SELECT YEARWEEK(day,3) as week, sum(clicks) as clicks FROM {$metric_table} WHERE lid=:lid AND day BETWEEN :fromtime AND :totime GROUP BY week ORDER BY week
+			", array(
+              ':lid' => $lid, ':fromtime' => $fromTime, ':totime' => $toTime,
+            ));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by week from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'week',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    } else {
+        $query  = array();
+        $params = array();
+        foreach ($monthspan as $Y_m => $dontcare) {
+            /// YEARWEEK(~,3) to match monday first, YEARWEEK(~,4) to match sunday first
+            $metric_table             = "{$metric_db}.shorturl_metric_link_{$Y_m}_day";
+            $query[]                  = "( SELECT YEARWEEK(day,3) as week, sum(clicks) as clicks FROM {$metric_table} WHERE lid=:lid{$Y_m} AND day BETWEEN :fromtime{$Y_m} AND :totime{$Y_m} GROUP BY week )";
+            $params[':lid'.$Y_m]      = $lid;
+            $params[':fromtime'.$Y_m] = $fromTime;
+            $params[':totime'.$Y_m]   = $toTime;
+        }
+        $weekQuery = 'SELECT week, sum(clicks) as clicks FROM ( '.implode(' UNION ', $query).' ) u GROUP BY week ORDER BY week';
+        try {
+            $results = db_query($weekQuery, $params);
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by week from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'week',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    }
+    $max = 0;
+    $sum = 0;
+    foreach ($results as $row) {
+        $clicks = intval($row->clicks);
+        if (isset($data[$row->week])) {
+            $data[$row->week]['clicks'] = $clicks;
+        } else {
+            $yyyy      = substr($row->week, 0, 4);
+            $ww        = substr($row->week, 4, 2)-1;
+            $weekStart = strtotime("{$yyyy}-01-01 +{$ww} weeks");
+            if (intval(date('N', $weekStart)) < 7 ) {
+                $weekStart = strtotime('last sunday', $weekStart);
+            }
+            $data[$row->week] = array('label' => date('n/j', $weekStart), 'clicks' => $clicks);
+        }
+        if ($clicks > $max) {
+            $max = $clicks;
+        }
+        $sum += $clicks;
+    }
+    ksort($data,SORT_NUMERIC);
+
+    return array(
+        'bucket' => 'week',
+        'max'    => $max,
+        'sum'    => $sum,
+        'data'   => $data,
+    );
+}
+
+function shorturl_metrics_data_by_month($lid, $fromDate, $toDate)
+{
+    $metric_db = _shorturl_metrics_db_name();
+    $fromMonth = date('F', $fromDate);
+    $toMonth   = date('F', $toDate);
+    $fromTime = date('Y-m-00 00:00:00', $fromDate);
+    $toTime   = date('Y-m-00 00:00:00', $toDate);
+    $years    = range(intval(date('Y', $fromDate)), intval(date('Y', $toDate)));
+
+    if (count($years) == 1) {
+        $metric_table = "{$metric_db}.shorturl_metric_link_".date('Y', $fromDate).'_month';
+        try {
+            $results = db_query("
+			  SELECT * FROM {$metric_table} WHERE lid=:lid AND month BETWEEN :fromtime AND :totime ORDER BY month
+			", array(
+              ':lid' => $lid, ':fromtime' => $fromTime, ':totime' => $toTime,
+            ));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by month from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'month',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    } else {
+        $query  = array();
+        $params = array();
+        foreach ($years as $Y) {
+            $metric_table           = "{$metric_db}.shorturl_metric_link_{$Y}_month";
+            $query[]                = "( SELECT * FROM {$metric_table} WHERE lid=:lid{$Y} AND month BETWEEN :fromtime{$Y} AND :totime{$Y} ORDER BY month )";
+            $params[':lid'.$Y]      = $lid;
+            $params[':fromtime'.$Y] = $fromTime;
+            $params[':totime'.$Y]   = $toTime;
+        }
+        try {
+            $results = db_query(implode(' UNION ', $query), $params);
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by month from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'month',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    }
+    $data = array();
+    // Initialize an empty array with all possible months in range
+    // 28 days is shortest possible month, so we step through by 28 days at a time
+    // and don't care if we initialize some months more than once as long as we
+    // get them all
+    for ($a = $fromDate; $a < $toDate; $a = strtotime('+28 days', $a)) {
+        $data[date('Ym', $a)] = array('label' => date('F', $a), 'clicks' => 0);
+    }
+    $data[date('Ym', $toDate)] = array('label' => date('F', $toDate), 'clicks' => 0);
+    $max = 0;
+    $sum = 0;
+    foreach ($results as $row) {
+        $clicks                     = intval($row->clicks);
+        $rowTime                    = strtotime(substr($row->month, 0, 7));
+        $data[date('Ym', $rowTime)] = array('label' => date('F', $rowTime), 'clicks' => $clicks);
+        if ($clicks > $max) {
+            $max = $clicks;
+        }
+        $sum += $clicks;
+    }
+    return array(
+        'bucket' => 'month',
+        'max'    => $max,
+        'sum'    => $sum,
+        'data'   => $data,
+    );
+}
+
+function shorturl_metrics_data_by_year($lid, $fromDate, $toDate)
+{
+    $metric_db = _shorturl_metrics_db_name();
+    $fromMonth = date('F', $fromDate);
+    $toMonth   = date('F', $toDate);
+    $fromTime  = date('Y-m-00 00:00:00', $fromDate);
+    $toTime    = date('Y-m-00 00:00:00', $toDate);
+
+    $years = range(intval(date('Y', $fromDate)), intval(date('Y', $toDate)));
+
+    if (count($years) == 1) {
+        $metric_table = "{$metric_db}.shorturl_metric_link_".date('Y', $fromDate).'_month';
+        try {
+            $results = db_query("
+			  SELECT * FROM {$metric_table} WHERE lid=:lid AND month BETWEEN :fromtime AND :totime ORDER BY month
+			", array(
+                ':lid' => $lid, ':fromtime' => $fromTime, ':totime' => $toTime,
+            ));
+        } catch (Exception $e) {
+            watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by year from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'year',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    } else {
+        $query  = array();
+        $params = array();
+        foreach ($years as $Y) {
+            $metric_table           = "{$metric_db}.shorturl_metric_link_{$Y}_month";
+            $query[]                = "( SELECT YEAR(month) as year, sum(clicks) as clicks  FROM {$metric_table} WHERE lid=:lid{$Y} AND month BETWEEN :fromtime{$Y} AND :totime{$Y} GROUP BY year )";
+            $params[':lid'.$Y]      = $lid;
+            $params[':fromtime'.$Y] = $fromTime;
+            $params[':totime'.$Y]   = $toTime;
+        }
+        $yearQuery = 'SELECT year, sum(clicks) as clicks FROM ( '.implode(' UNION ', $query).' ) u GROUP BY year ORDER BY year';
+	try {
+		#$results = db_query($yearQuery, $params);
+		#$results = db_query($yearQuery, $params)->fetchAllAssoc('year');
+		#error_log('multi year query '.print_r($results,true).memory_get_peak_usage(true));
+
+		global $databases;            $direct_db = new PDO("mysql:host={$databases['default']['default']['host']};dbname={$databases['default']['default']['database']};", $databases['default']['default']['username'], $databases['default']['default']['password'], array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));            
+		$results = $direct_db->prepare($yearQuery,array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY));            
+		$results->execute($params);
+
+        } catch (Exception $e) {
+		watchdog_exception('shorturl', $e, 'Error querying metrics for %lid by year from %fromDate to %toDate', array('%lid' => $lid, '%fromDate' => $fromDate, '%toDate' => $toDate ), WATCHDOG_ERROR);
+            return array(
+                'bucket' => 'year',
+                'max'    => 0,
+                'sum'    => 0,
+                'data'   => array(),
+            );
+        }
+    }
+    $data = array();
+    for ($a = $fromDate; $a < $toDate; $a = strtotime('+300 days', $a)) {
+        $data[date('Y', $a)] = array('label' => date('Y', $a), 'clicks' => 0);
+    }
+    $data[date('Y', $toDate)] = array('label' => date('Y', $toDate), 'clicks' => 0);
+
+    $max = 0;
+    $sum = 0;
+
+    foreach ($results as $row) {
+    #while ($row = $results->fetchAssoc()) {
+	#php_error(print_r($row,true));
+        $clicks           = intval($row['clicks']);
+        $data[$row['year']] = array('label' => $row['year'], 'clicks' => $clicks);
+        if ($clicks > $max) {
+            $max = $clicks;
+        }
+        $sum += $clicks;
+    }
+
+    return array(
+        'bucket' => 'year',
+        'max'    => $max,
+        'sum'    => $sum,
+        'data'   => $data,
+    );
+}

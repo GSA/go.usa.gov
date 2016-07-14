@@ -1,0 +1,114 @@
+<html>
+<head>
+<style>
+
+
+.input-wrap
+{
+  font-size: 1em;
+  display: inline-block;
+  position: relative;
+  padding: 0; margin: 0;
+  height: 19px;
+  width:  9em;
+  margin-right: 2em;
+  padding: 0px;
+}
+.input-wrap input.cal-date
+{
+  font-size: 1em;
+  display: block;
+  text-align: center;
+  height: 21px;
+  width: 7em;
+  margin: 0; padding: 0; border: 1px solid #BBB;
+  margin-right: 0;
+  position: absolute; left:0px; top:0px;
+  border-radius: 4px 0px 0px 4px;
+}
+.input-wrap a.cal-toggle
+{
+  display: block;
+  padding: 0px; margin: 0px;
+  height: 19px;
+  width:  2em;
+  position: absolute; right:0px; top:0px;
+  cursor: pointer;
+  border: 1px solid #BBB;
+  border-left-width: 0px;
+  border-radius: 2px 4px 4px 2px;
+}
+.input-wrap a.cal-toggle .cal-icon
+{
+  display: block;
+  overflow: hidden;
+  text-indent: 100%;
+  height: 14px;
+  width:  12px;
+  position: absolute;
+  left: 50%; margin-left: -6px;
+  top:  50%; margin-top:  -8px;
+  background: url('calendar-icon.png') 0px 0px no-repeat;
+  cursor: pointer;
+}
+.input-wrap a.cal-toggle:hover  .cal-icon,
+.input-wrap a.cal-toggle:focus  .cal-icon,
+.input-wrap a.cal-toggle:active .cal-icon,
+.input-wrap a.cal-toggle.opened .cal-icon
+{
+  background-position: -12px 0px;
+}
+.input-wrap a.cal-toggle:focus,
+.input-wrap a.cal-toggle:active,
+.input-wrap a.cal-toggle.opened
+{
+  border-color: #666;
+  border-left-width:1px;
+}
+
+
+#w2.input-wrap
+{
+  padding: 4px;
+  border: solid 1px #CCCCCC;
+}
+#w2.input-wrap input.cal-date
+{
+   left:2px; top:2px;
+   border-color: #FF8888;
+}
+#w2.input-wrap a.cal-toggle
+{
+   right:2px; top:2px;
+   border-color: #8888FF;
+}
+
+</style>
+</head>
+<body>
+
+<form id="metricsForm" name="metricsForm" action="'.request_uri().'#metrics" method="post" class="metricsRange">
+      <br /><br />
+      <label for="fromDate">From:</label>
+      <span class="NOT-input-wrap" id="w1">
+          <input type="text" value="" name="fromDate" id="fromDate" class="cal-date" size="12" />
+          <a href="#fromCalendarToggle" id="fromCal" class="cal-toggle"><span class="cal-icon">calendar</span></a>
+      </span>
+
+      <br /><br />
+      <label for="toDate">To:</label>
+      <span class="input-wrap" id="w2">
+          <input type="text" value="" name="toDate"   id="toDate"   class="cal-date" size="12" />
+          <a href="#fromCalendarToggle" id="toCal" class="cal-toggle"><span class="cal-icon">calendar</span></a>
+      </span>
+
+      <br /><br />
+      <label for="toDate">To:</label>
+      <span class="input-wrap" id="w3">
+          <input type="text" value="" name="toDate"   id="toDate"   class="cal-date" size="12" />
+          <a href="#fromCalendarToggle" id="toCal" class="cal-toggle"><span class="cal-icon">calendar</span></a>
+      </span>
+
+</form>
+</body>
+</HTML>

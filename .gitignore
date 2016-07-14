@@ -1,0 +1,4 @@
+.DS_Store
+dev.env
+prod.env
+data/*

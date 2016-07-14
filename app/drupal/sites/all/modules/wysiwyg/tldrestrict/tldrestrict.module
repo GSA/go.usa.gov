@@ -1,0 +1,118 @@
+<?php
+// $Id: tldrestrict.module,v 1.2 2009/07/23 19:21:10 seanr Exp $
+
+/**
+ * Implementation of hook_help().
+ */
+function tldrestrict_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#tldrestrict':
+      $output = '<p>'. t('The <em>TLD Restriction</em> module allows you to restrict user registrations to a specified list of top level domains (TLDs). The module will then require new registrations to use an email from one of the specified TLDs. You can configure this in the <a href="@usersettings">User settings administration</a>.', array('@usersettings' => base_path() .'admin/user/settings')) . '</p>';
+      return $output;
+    break;
+  }
+}
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function tldrestrict_form_alter(&$form, $form_state, $form_id) {
+  if ($form_id == 'shorten_admin') {
+    $form['tldrestrict'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Restrict by TLDs'),
+      '#weight' => 10,
+    );
+    $form['tldrestrict']['tldrestrict_tlds'] = array(
+      '#type' => 'textarea',
+      '#title' => t('Allowed TLDs'),
+      '#description' => t('Enter TLDs without periods separated by commas (e.g. "gov,mil,us").  Leave blank to allow all.'),
+      '#default_value' => variable_get('tldrestrict_tlds', ''),
+      '#maxlength' => 2048
+    );
+  }
+  if ($form_id == 'shorten_form_shorten') {
+    $form['#validate'][] = 'tldrestrict_shorten_validate';
+  }
+}
+
+/**
+ * Validate function for the Shorten form.
+ */
+function tldrestrict_shorten_validate($form, &$form_state)
+{
+    /// get tlds
+    //$tld_list = variable_get('tldrestrict_tlds', '');
+    //$allowed_tlds = array_unique(explode(',', $tld_list));
+    $allowed_tlds = array_unique(array_map('trim',explode(',',variable_get('tldrestrict_tlds',''))));
+    $tlds = '';
+    if ( !empty($allowed_tlds) )
+    {
+        $last = count($allowed_tlds)-1;
+        for ( $t=0; $t<=$last; $t++ )
+        {
+           $tlds .= $t>0 ? ', ' : '';
+           $tlds .= $t==$last ? 'or ':'';
+           $tlds .= '.'.$allowed_tlds[$t];
+        }
+    }   
+
+    if ( tldrestrict_url_host_allowed($url) )
+    {
+      form_set_error('url', t('A valid URL ends in !tlds.', array('!tlds'=>$tlds) ) );
+    }
+}
+
+/**
+ * Implement hook_url_shorten_allowed from shorten module
+ */
+function tldrestrict_url_shorten_allowed( $url ) 
+{
+    if ( tldrestrict_url_host_allowed($url) ) 
+    {
+        return array( 'allowed'=>true, 'message'=>'tld allowed' );
+    }
+
+    /// build fancy message listing all available tlds
+    $allowed_tlds = array_unique(array_map('trim',explode(',',variable_get('tldrestrict_tlds',''))));
+    $tlds = '';
+    if ( !empty($allowed_tlds) )
+    {
+        $last = count($allowed_tlds)-1;
+        for ( $t=0; $t<=$last; $t++ )
+        {
+           $tlds .= $t>0 ? ', ' : '';
+           $tlds .= $t==$last ? 'or ':'';
+           $tlds .= '.'.$allowed_tlds[$t];
+        }
+    }   
+    return array( 'allowed'=>false, 'message'=>t('A valid URL ends in !tlds.', array('!tlds'=>$tlds) ) );
+}
+
+function tldrestrict_url_host_allowed( $url )
+{
+  $tld_list = variable_get('tldrestrict_tlds', '');
+  if ( empty($tld_list) )
+  {
+    return true;
+  }
+  $tlds = array_unique(explode(',', $tld_list));
+  #$u = shorten_parse_url( $url );
+
+  if (empty($u['host']))
+  {
+      return false;
+  }
+  /// other module compiles these as a single regex - probabaly a good idea to do here too
+  foreach ($tlds as $tld)
+  {
+      $tld = trim($tld);
+      $dot_tld = '.'.$tld;
+      if ( substr($u['host'],-strlen($dot_tld))==$dot_tld || $u['host']==$tld )
+      {
+          return true;
+      }
+  }
+  return false; 
+}
+

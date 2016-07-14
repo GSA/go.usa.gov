@@ -1,0 +1,1728 @@
+<?php
+
+// Minimum length of URI: 3 characters (3844 in base10 is equivalent to first 3-char number in base62).
+// This setting is modifyable from settings.php if you don't like it.
+define('SHORTURL_START_FROM', variable_get('shorturl_start_from', 2100000));
+
+module_load_include('inc', 'shorturl', 'includes/shorturl.engine');
+module_load_include('inc', 'shorturl', 'includes/shorturl.metrics');
+module_load_include('inc', 'shorturl', 'includes/shorturl.blocks');
+module_load_include('inc', 'shorturl', 'includes/shorturl.views');
+module_load_include('inc', 'shorturl', 'includes/shorturl.admin');
+
+// function shorturl_url_shorten_allowed() { return array('allowed' => false, 'message' => t('Go.USA.gov is not accepting new shorten requests at this time.')); }
+
+/**
+ * Implementation of hook_menu().
+ */
+function shorturl_menu()
+{
+    $items['admin/settings/shorturl'] = array(
+        'title'            => 'ShortURL',
+        'description'      => 'Configure the settings for ShortURL.',
+        'page callback'    => 'drupal_get_form',
+        'page arguments'   => array('shorturl_admin_settings_form'),
+        'access arguments' => array('administer shorturl'),
+        'file'             => 'includes/shorturl.admin.inc',
+    );
+    $items['shorturl'] = array(
+        'title'            => 'Short URL Statistics',
+        'page callback'    => 'shorturl_statistics',
+        'access arguments' => array('view all statistics'),
+        'type'             => MENU_NORMAL_ITEM,
+    );
+    $items['shorturl/all'] = array(
+        'title'            => 'All users',
+        'page callback'    => 'shorturl_statistics',
+        'page arguments'   => array('all'),
+        'access arguments' => array('view all statistics'),
+        'type'             => MENU_LOCAL_TASK,
+    );
+    $items['shorturl/user'] = array(
+        'title'            => 'Your URLs',
+        'page callback'    => 'shorturl_statistics',
+        'page arguments'   => array('all'),
+        'access arguments' => array('view own statistics'),
+        'type'             => MENU_DEFAULT_LOCAL_TASK,
+    );
+    $items['shorturl/search'] = array(
+        'title'            => 'Search Your URLs',
+        'page callback'    => 'shorturl_search',
+        'access arguments' => array('view own statistics'),
+        'type'             => MENU_LOCAL_TASK,
+    );
+    $items['shorturl/user/%user'] = array(
+        'title'            => 'Short URL Statistics',
+        'page callback'    => 'shorturl_statistics',
+        'page arguments'   => array(2),
+        'access arguments' => array('view all statistics'),
+        'type'             => MENU_CALLBACK,
+    );
+    $items['shorturl/user/%user/export'] = array(
+        'title'            => 'Export to Excel',
+        'description'      => t('Export link details as a CSV file'),
+        'page callback'    => 'shorturl_statistics_export',
+        'page arguments'   => array(2),
+        'access arguments' => array('export own statistics'),
+        'type'             => MENU_CALLBACK,
+    );
+    $items['shorturl/list/%shorturl'] = array(
+        'title'            => 'Short URL Statistics',
+        'page callback'    => 'shorturl_statistics',
+        'page arguments'   => array('all', 2),
+        'access arguments' => array('view own statistics'),
+        'type'             => MENU_CALLBACK,
+    );
+    $items['shorturl/delete/%shorturl'] = array(
+        'page callback'    => 'shorturl_delete_link',
+        'page arguments'   => array(2),
+        'access arguments' => array('administer shorturl'),
+        'type'             => MENU_CALLBACK,
+    );
+    $items['shorturl/link/%shorturl'] = array(
+        'title'            => 'Short URL Statistics',
+        'page callback'    => 'shorturl_statistics_link',
+        'page arguments'   => array(2),
+        'access arguments' => array('view link details'),
+        'type'             => MENU_CALLBACK,
+    );
+    $items['admin/reports/shorturl/baddata'] = array(
+        'title'            => 'Short URL Bad Data',
+        'description'      => 'View report about bad ShortURL data.',
+        'page callback'    => 'shorturl_badurl_report',
+        'access arguments' => array('administer shorturl'),
+    );
+    $items['admin/reports/shorturl/baddata/%user'] = array(
+        'title'            => 'Short URL Bad Data',
+        'description'      => 'View report about bad ShortURL data.',
+        'page callback'    => 'shorturl_badurl_report',
+        'page arguments'   => array(2),
+        'access arguments' => array('administer shorturl'),
+    );
+    $items['shorturl/notes/%shorturl'] = array(
+        'page callback'   => '_shorturl_set_link_notes_ajax',
+        'page arguments'  => array(2),
+        'access callback' => 'user_is_logged_in',
+        'type'            => MENU_CALLBACK,
+    );
+    $items['shorturl/metrics/%shorturl'] = array(
+        'title'            => 'Short URL Metrics',
+        'page callback'    => 'shorturl_statistics_link_export',
+        'page arguments'   => array(2),
+        'access arguments' => array('export own statistics'),
+    );
+
+    return $items;
+}
+
+/**
+ * Implementation of hook_init().
+ * We are trying to jump in before hook_menu
+ * so we can do our own Routing for shortened urls.
+ */
+function shorturl_init()
+{
+    /// logged-in users get the /shorturl screen as their frontpage
+    if (user_is_logged_in()) {
+        variable_set('site_frontpage', 'shorturl');
+    }
+
+    /* hook init is used so we run this check after all modules are already loaded in memory
+     * if drupal already knows of a handler for this url, we assume it is not a shorturl
+     * this miiiiight leave us open to collisions, so maybe the token generator could check
+     * to see if a token is already being handled by core or any module before using it, but
+     * that won't protect against
+     * any new drupal-urls colliding with already existing tokens :(
+     */
+    $url_handler = menu_get_item();
+    if (!empty($url_handler)) {
+        return;
+    }
+
+    $token = isset($_GET['q']) ? $_GET['q'] : null;
+    if (!empty($token)) {
+        // Added condition to check whether the url_key is of the "new" token type.
+        if (strlen($token) >= 4 && strlen($token) <= 15) {
+            $lid = shorturl_decode_url($token);
+        } elseif (strlen($token) == 3) {
+            $lid = shorturl_decode_url_custom($token);
+        } else {
+            // this is not a shorturl
+            return;
+        }
+        if (empty($lid)) {
+            /// this is not a shorturl
+            return;
+        }
+
+        $orig_url = db_select('shorturl_link', 'l')
+                        ->fields('l', array('orig_url'))
+                        ->condition('lid', $lid, '=')
+                        ->execute()
+                        ->fetchColumn();
+        if (!empty($orig_url)) {
+            $orig_parse = shorturl_parse_url($orig_url);
+
+            if (empty($orig_parse['scheme'])) {
+                $orig_url = url($orig_url, array('absolute' => true)); //Let drupal make relative URLs absolute
+            }
+
+            $referrer  = (empty($_SERVER['HTTP_REFERER']))    ? '' : $_SERVER['HTTP_REFERER'];
+            $ref       = shorturl_parse_url($referrer);
+            $remote_ip = (empty($_SERVER['REMOTE_ADDR']))     ? '' : $_SERVER['REMOTE_ADDR'];
+            $browser   = (empty($_SERVER['HTTP_USER_AGENT'])) ? '' : $_SERVER['HTTP_USER_AGENT'];
+
+            $domain      = (!empty($ref['scheme']) ? $ref['scheme'].'://' : '').$ref['host'];
+            $access_time = (int) time();
+
+            // $iid = db_insert('shorturl_access',array('target'=>'metrics'))
+            //         ->fields(array(
+            //             'url_id'      => $lid,
+            //             'url_key'     => $token,
+            //             'remote_ip'   => $remote_ip,
+            //             'referrer'    => $referrer,
+            //             'browser'     => $browser,
+            //             'access_time' => $access_time,
+            //         ))
+            //         ->execute();
+
+            $metric_db = _shorturl_metrics_db_name();
+            try {
+                @db_query("INSERT INTO {$metric_db}.shorturl_access (url_id,url_key,remote_ip,referrer,browser,access_time) VALUES (:lid,:token,:remote_ip,:referrer,:browser,:access_time)",
+                     array( ':lid'         => $lid,
+                            ':token'       => $token,
+                            ':remote_ip'   => $remote_ip,
+                            ':referrer'    => $referrer,
+                            ':browser'     => $browser,
+                            ':access_time' => $access_time
+                ));
+            } catch (Exception $e) {
+                watchdog_exception('shorturl', $e, 'Error inserting shorturl_access clickthrough, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $token, '%lid' => $lid, '%orig_url' => $orig_url, '%ref' => $referrer), WATCHDOG_ERROR);
+            }
+
+
+            $click = array(
+                // 'iid'         => $iid,
+                'lid'         => $lid,
+                'token'       => $token,
+                'orig_url'    => $orig_url,
+                'remote_ip'   => $remote_ip,
+                'referrer'    => $referrer,
+                'domain'      => $domain,
+                'browser'     => $browser,
+                'access_time' => $access_time,
+            );
+            module_invoke_all('shorturl_clickthrough', $click);
+        }
+    }
+}
+
+/**
+ * Implementation of hook_load().
+ * Now we can use '/path/%shorturl' in the routes of _menu
+ * and it will send our handling function a shorturl_link object
+ * instead of the token string.
+ */
+function shorturl_load($token)
+{
+    // (To change URL detail page's URLs to hash instead of ID)
+    if (strlen($token) >= 4 && strlen($token) <= 15) {
+        $lid = shorturl_decode_url($token);
+    } elseif (strlen($token) == 3) {
+        $lid = shorturl_decode_url_custom($token);
+    } else {
+        // invalid link ID
+        $lid = null;
+    }
+
+    if ($lid) {
+        return db_query('SELECT * FROM {shorturl_link} WHERE lid = :lid', array(':lid' => $lid))->fetchObject();
+    } else {
+        drupal_set_message(t("Invalid short URL '@key'", array('@key' => $token)), 'error');
+
+        return;
+    }
+}
+
+function shorturl_permission()
+{
+    return array(
+        'view own statistic' => array(
+            'title'       => t('view own statistic'),
+            'description' => t('view own statistic'),
+        ),
+        'view all statistics' => array(
+            'title'       => t('Administer my module'),
+            'description' => t('Administer my module'),
+        ),
+        'view link details' => array(
+            'title'       => t('view link details'),
+            'description' => t('view link details'),
+        ),
+        'export all statistics' => array(
+            'title'       => t('export all statistics'),
+            'description' => t('export all statistics'),
+        ),
+        'export own statistics' => array(
+            'title'       => t('export own statistics'),
+            'description' => t('export own statistics'),
+        ),
+        'administer shorturl' => array(
+            'title'       => t('administer shorturl'),
+            'description' => t('administer shorturl'),
+        ),
+    );
+}
+
+function shorturl_statistics($for_user = null, $search = null)
+{
+    global $user;
+    global $base_url;
+    $per_page_limit = 25;
+
+    if ($for_user === 'all') {
+        $who = 'All';
+    } elseif (empty($for_user) || empty($for_user->uid) || empty($for_user->name)) {
+        $for_user = $user;
+        $who      = ($for_user->uid == $user->uid) ? 'Your' : $for_user->name."'s";
+    }
+
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css', 'module', 'all');
+    $output      = '';
+    $jsify_table = false;
+
+    /// ALL FOR SPECIFIC USER
+    # if (is_object($for_user) && ($for_user->uid != 0) && empty($search) )
+    if (is_object($for_user) && !empty($for_user->uid) && empty($search)) {
+        drupal_set_title(t('!who Links', array('!who' => $who)));
+        $header = array(
+            'info'   => array('data' => t('Info'), 'field' => 'orig_url'),
+            'clicks' => array('data' => t('Clicks'), 'field' => 'clicks'),
+            'date'   => array('data' => t('Date'), 'field' => 'created',  'sort' => 'desc'),
+        );
+
+        $select_statement = db_select('shorturl_link', 'l')
+            ->extend('PagerDefault')
+            ->extend('TableSort')
+            ->orderByHeader($header);
+        $select_statement->fields('l', array('lid', 'orig_url', 'title', 'description', 'keywords', 'clicks', 'created', 'uid', 'notes'))
+               ->condition('l.uid', $for_user->uid, '=')
+               ->condition('l.orig_url', '', '<>')
+               ->limit($per_page_limit);
+
+        $links = $select_statement->execute();
+
+        //if (is_object($for_user) && ($for_user->uid != 0) && user_access('export '.$access.' statistics')) {
+        if (user_access('export own statistics')) {
+            $output .= l(t('Export to CSV'), 'shorturl/user/'.$for_user->uid.'/export').' '.t('(Opens in most spreadsheet applications)');
+        }
+    } elseif (is_object($search)) { /// ALL POINTING TO SPECIFIC URL
+        $jsify_table = true;
+        drupal_set_title(t('Shortened Link'));
+        $header = array(
+            array('data' => 'Info',   'field' => 'title'),
+            array('data' => 'Clicks', 'field' => 'clicks'),
+            array('data' => 'Date',   'field' => 'created', 'sort' => 'desc'),
+        );
+
+        $select_statement = db_select('shorturl_link', 'l')
+                ->extend('PagerDefault')
+                ->extend('TableSort')
+                ->orderByHeader($header);
+        $select_statement
+            ->fields('l', array('lid', 'orig_url', 'title', 'description', 'keywords', 'clicks', 'created', 'uid', 'notes'))
+            ->condition('orig_url', $search->orig_url)
+            ->condition('orig_url', '', '<>');
+        $links = $select_statement
+            ->limit($per_page_limit)
+            ->execute();
+    } elseif (is_string($search)) { /// SEARCH URL
+        $jsify_table = true;
+        if (isset($_POST['search_page'])) {
+            $_GET['page'] = $_POST['search_page'];
+        }
+        if (isset($_POST['search_sort'])) {
+            $_GET['sort'] = $_POST['search_sort'];
+        }
+        if (isset($_POST['search_order'])) {
+            $_GET['order'] = $_POST['search_order'];
+        }
+        drupal_set_title(t('Search !who Links', array('!who' => $who)));
+
+        $header = array(
+            array('data' => 'Info',   'field' => 'title'),
+            array('data' => 'Clicks', 'field' => 'clicks'),
+            array('data' => 'Date',   'field' => 'created', 'sort' => 'desc'),
+        );
+        $search = trim($search);
+
+        $select_statement = db_select('shorturl_link', 'l')
+            ->extend('PagerDefault')
+            ->extend('TableSort')
+            ->orderByHeader($header);
+
+        $select_statement
+            ->fields('l', array('lid', 'orig_url', 'title', 'description', 'keywords', 'clicks', 'created', 'uid', 'notes'))
+            ->condition('orig_url', '%'.db_like($search).'%', 'LIKE')
+            ->condition('orig_url', '', '<>');
+
+        if (is_object($for_user) && !empty($for_user->uid)) {
+            $select_statement->condition('uid', $for_user->uid);
+        }
+        $links = $select_statement
+            ->limit($per_page_limit)
+            ->execute();
+    } else { /// TOP 25
+        drupal_set_title(t('25 Most Popular !site Links', array('!site' => variable_get('site_name', 'Drupal'))));
+        $header = array(
+            array('scope' => 'col', 'data' => t('Info')),
+            array('scope' => 'col', 'data' => t('Clicks')),
+            array('scope' => 'col', 'data' => t('Date')),
+        );
+        /// TIE THIS IN TO SORTING SEARCHING HERE
+        /// copy from bad urls report
+        $metric_db = _shorturl_metrics_db_name();
+        $sql       = "
+          SELECT l.*, d.links
+          FROM (
+              SELECT lid, orig_url, title, description, keywords, clicks, created, uid, notes
+              FROM {shorturl_link}
+              WHERE orig_url <> ''
+              ORDER BY clicks DESC
+              LIMIT 25
+          ) l
+          LEFT JOIN {$metric_db}.shorturl_metric_destination d
+          ON ( MD5(l.orig_url) = d.destmd5 )
+          ORDER BY clicks DESC
+        ";
+        $links = db_query($sql);
+    }
+
+    $rows = array();
+    foreach ($links as $link) {
+        $key    = shorturl_encode_url($link->lid);
+        $target = (is_object($for_user) && ($for_user->uid != 0)) ? $link->orig_url : $key;
+
+        if (!empty($link->title)) {
+            $title   = html_entity_decode($link->title, ENT_QUOTES, 'UTF-8');
+            $url     = (strlen($link->orig_url) > 65) ? substr($link->orig_url, 0, 65).'...' : $link->orig_url;
+            $title   = (strlen($title) > 50) ? substr($title, 0, 50).'...' : $title;
+            $details = '<div class="link">'.l($title, $link->orig_url).'</div><div class="url">'.htmlspecialchars($url).'</div>';
+        } else {
+            $url     = (strlen($link->orig_url) > 45) ? substr($link->orig_url, 0, 45).'...' : $link->orig_url;
+            $details = '<div class="link">'.l($url, $link->orig_url).'</div>';
+        }
+
+        if (!empty($link->description)) {
+            $description = html_entity_decode($link->description, ENT_QUOTES, 'UTF-8');
+            $details .= '<div class="description">'.$description.'</div>';
+        }
+
+        /*
+         * We group links by original URL to show aggragated stats, but need to link to a
+         * list of individual links.
+         */
+        //$links = (!empty($link->links)) ? $link->links + 1 - $link->clicks : 1;
+
+        if (user_access('view link details')) {
+            $links = (!empty($link->links)) ? $link->links : 1;
+            if ($links == 2) {
+                $details .= '<div class="details">'.l(t('view the 2 links to this page'), 'shorturl/list/'.$key).'</div>';
+            } elseif ($links > 2) {
+                $details .= '<div class="details">'.l(t('view all !links links to this page', array('!links' => $links)), 'shorturl/list/'.$key).'</div>';
+            } else {
+                $details .= '<div class="details">'.l(t('metrics'), 'shorturl/link/'.$key).' '.t('!url', array('!url' => _shorturl_remove_https(url($key, array('absolute' => true))))).'</div>';
+                //$details .= ' <br /> '. _shorturl_remove_https(url($key, array('absolute' => TRUE))) .'</div>';
+            }
+        }
+        $details .= '<span id="shorturl_link_notes_wrap_'.$key.'">';
+        if ($user->uid == $link->uid) {
+            $details .= '  <span id="shorturl_link_notes_view_'.$key.'" class="notes-view">';
+            $details .= '    <a href="javascript:edit_notes(\''.$key.'\')" class="edit-notes">'.t('notes').'</a> ';
+            $details .= '    <span id="shorturl_link_notes_display_'.$key.'">'.filter_xss($link->notes).'</span>';
+            $details .= '  </span>';
+            $details .= '  <span id="shorturl_link_notes_manage_'.$key.'" class="notes-edit">';
+            $details .= '    <a href="javascript:save_shorturl_notes(\''.$key.'\')" class="save-notes">'.t('save').'</a> ';
+            $details .= '    <textarea id="shorturl_link_notes_edit_'.$key.'" class="notes-value"></textarea>';
+            $details .= '  </span>';
+        } elseif (user_access('administer shorturl') && !empty($link->notes)) {
+            $details .= '<span id="shorturl_link_notes_display_'.$key.'" class="notes-view"> notes: '.filter_xss($link->notes).'</span>';
+        }
+        $details .= '</span>';
+        $rows[] = array(
+            'Info'   => array('class' => array('details'), 'data' => $details),
+            'Clicks' => array('class' => array('clicks'),  'data' => '<div class="count">'.number_format($link->clicks).'</div>'),
+            'Date'   => array('class' => array('date'),    'data' => format_date($link->created, variable_get('shorturl_date_format', 'small'), variable_get('shorturl_custom_date_format', ''))),
+        );
+        /*$rows[] = array($details,
+            '<div class="count">'.number_format($link->clicks).'</div>',
+           format_date($link->created, variable_get('shorturl_date_format', 'small'), variable_get('shorturl_custom_date_format', '')));*/
+    }
+
+    if (!$rows) {
+        $rows[] = array(array('data' => t('No links available.'), 'colspan' => '3'));
+    }
+
+    $output .= '<div id="shorturl-statistics" class="shorturl">';
+
+    $n = url('shorturl/notes/', array('absolute' => true));
+
+    $output .= '<script>'
+        .'function edit_notes(key){ '
+        .'    $("#shorturl_link_notes_edit_"   + key).val($("#shorturl_link_notes_display_" + key).html()); '
+        .'    $("#shorturl_link_notes_view_"   + key).hide(); '
+        .'    $("#shorturl_link_notes_manage_" + key).show(); '
+        .'    $("#shorturl_link_notes_edit_"   + key).focus(); '
+        .'}'
+        .'function save_shorturl_notes(key){ '
+        .'  jQuery.ajax({ type:"get", url:"'.$n.'"+key, '
+        .'      data:{notes:jQuery("#shorturl_link_notes_edit_"+key).val()}, '
+        .'      dataType:"jsonp", crossDomain:true, jsonp:"callback", '
+        .'      success:function(data,status,jqxhr){ '
+        .'          if ( data && data.hasOwnProperty("notes") ) { '
+        .'              jQuery("#shorturl_link_notes_display_"+key).html(data.notes); '
+        .'          } '
+        .'      }, '
+        .'      complete:function(jqxhr,status){ '
+        .'          jQuery("#shorturl_link_notes_view_"   + key).show(); '
+        .'          jQuery("#shorturl_link_notes_manage_" + key).hide(); '
+        .'      } '
+        .'  }); '
+        .'}</script>';
+
+    // Output of table with the paging
+    //print_r($header);
+
+    $output .= theme('table',
+            array(
+                'header'     => $header,
+                'rows'       => $rows,
+                'attributes' => array(),
+                'sticky'     => true, // Table header will be sticky
+                'caption'    => '',
+                'colgroups'  => array(),
+                'empty'      => t('No links available.'), // The message to be displayed if table is empty
+            )
+        );
+    $output .= theme('pager');
+    // $output .= theme('table', $header, $rows);
+
+    # add the pager
+    //$output .= theme('pager');
+
+    $output .= '</div>';
+
+    // js_ify sort links of table
+    if ($jsify_table) {
+        $output = _shorturl_jsify_search_table($output);
+    }
+
+    return $output;
+}
+
+/**
+ * Generate unique token for arbitrary URL. Both absolute and relative
+ * URLs are supported.
+ *
+ * @param $long_url
+ *   the original URL
+ *
+ * @return shortened URI token
+ */
+function shorturl_shorten($long_url)
+{
+    global $user;
+    if ( empty($long_url) || strlen($long_url) > 2048 )
+    {
+        return $long_url;
+    }
+
+    $long_url = substr(trim($long_url),0,2048);
+    //Do we already have this URL?
+    if (!variable_get('shorturl_allow_duplicates', 0)) {
+        $existing_id = db_result(db_query('SELECT lid FROM {shorturl_link} WHERE orig_url = :long_url ', array(':long_url' => $long_url)));
+        if (!empty($existing_id)) {
+            $encoded = shorturl_encode_url($existing_id);
+            return $encoded;
+        }
+    }
+
+    $found_vacant = false;
+    $remote_ip    = (empty($_SERVER['REMOTE_ADDR'])) ? '' : $_SERVER['REMOTE_ADDR'];
+
+    $url_data = _shorturl_urldata($long_url);
+
+    $link              = new stdClass();
+    $link->uid         = $user->uid;
+    $link->orig_url    = $long_url;
+    $link->created     = (int) time();
+    $link->remote_ip   = $remote_ip;
+    $link->title       = substr(trim($url_data['title']), 0, 255);
+    $link->description = substr(trim($url_data['description']), 0, 255);
+    $link->keywords    = substr(trim($url_data['keywords']), 0, 255);
+
+    $last_id = db_query('SELECT max(lid) FROM {shorturl_link}')->fetchField();
+
+    $result_array = db_query("show variables like 'auto_increment_offset'");
+
+    foreach ($result_array as $resobj) {
+        $offset = $resobj->Value;
+    }
+
+    $result_array = db_query("show variables like 'auto_increment_increment'");
+    foreach ($result_array as $resobj) {
+        $increment = $resobj->Value;
+    }
+
+    if ($last_id == 0) {
+        $last_id = SHORTURL_START_FROM;
+    }
+
+    // calculate next MySQL sequence number (offset + N * increment)
+    $N       = floor(($last_id - $offset) / $increment);
+    $last_id = $offset + ($N + 1) * $increment;
+
+    $metric_db = _shorturl_metrics_db_name();
+    while (!$found_vacant) {
+        $encoded      = shorturl_encode_url($last_id);
+        $found_vacant = _shorturl_check_availability($encoded);
+        if (!$found_vacant) {
+            ++$last_id;
+        } else {
+            // Perform multi-threading safety check.
+            // Make sure nobody inserted a record with this $lid, while we were checking other stuff
+            $link->lid = $last_id;
+            $status    = drupal_write_record('shorturl_link', $link);
+            if ($status === false) {
+                $found_vacant = false;
+                ++$last_id;
+            } else {
+                db_query("INSERT INTO {$metric_db}.shorturl_metric_destination (destmd5,destination,links) VALUES (MD5(:origurl),:origurl,1) ON DUPLICATE KEY UPDATE links=links+1",
+                    array(':origurl' => $link->orig_url));
+            }
+        }
+    }
+
+    return $encoded;
+}
+
+function shorturl_statistics_export($user = null)
+{
+    if (empty($user) || !is_object($user)
+        || (!user_access('export all statistics')
+        &&   !user_access('export own statistics'))) {
+        drupal_add_http_header('Status', '401 Not Authorized');
+
+        return;
+    }
+    //date_default_timezone_set('UTC');
+    $sql = "
+		SELECT
+			lid         as 'Link ID',
+			orig_url    as 'Original URL',
+			title       as 'Title',
+			description as 'Description',
+			keywords    as 'Keywords',
+			notes       as 'Notes',
+			clicks      as 'Clicks',
+			DATE_FORMAT('%m-%d-%Y',created) as 'Created',
+			uid         as 'User ID',
+			''          as 'Short URL'
+		FROM
+			{shorturl_link}
+		WHERE
+			uid=:uid
+		ORDER BY
+			created ASC
+	";
+    $data = db_query($sql, array(':uid' => $user->uid))->fetchAll();
+
+    foreach ($data as $item) {
+        $item->{'Short URL'} = url( shorturl_encode_url($item->{'Link ID'}) , array('absolute' => true));
+    }
+    $filename = "shorturl-links-{$user->name}-(".date('Y-m-d').').csv';
+
+    _shorturl_output_csv($filename, $data);
+
+    // header('Content-Type: text/x-csv');
+    // header('Expires: '.gmdate('D, d M Y H:i:s').' GMT');
+    // header('Content-Disposition: attachment; filename="'.$_SERVER['SERVER_NAME'].'.shorturl.links.csv"');
+    // header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    // header('Pragma: public');
+    //
+    // $out = fopen('php://output', 'w');
+    //
+    // fputcsv($out, array('ID', 'Original URL', 'Title', 'Description', 'Keywords', 'Notes', 'Clicks', 'Created', 'User ID', 'Short URL'));
+    //
+    // foreach ($result as $log) {
+    //     $log->created   = date('m-d-Y', $log->created);
+    //     $log->short_url = url(shorturl_encode_url($log->lid), array('absolute' => true));
+    //     fputcsv($out, (array) $log);
+    // }
+}
+function _shorturl_access_link_data($link)
+{
+    return user_access('export all statistics')
+        || (user_access('export own statistics')
+            && $link->uid === $user->uid);
+}
+function shorturl_statistics_link_export($link)
+{
+    global $user;
+    if (empty($link) || empty($user)) {
+        drupal_goto('<front>');
+    }
+    /// have to have all-statistics or link has to be yours - this should be moved to _menu access
+    if (!(user_access('export all statistics')
+        || (user_access('export own statistics') && $link->uid === $user->uid))) {
+        drupal_add_http_header('Status', '401 Not Authorized');
+        return;
+    }
+
+    //$link_user = user_load($link->uid);
+    $metric_db = _shorturl_metrics_db_name();
+    $dateRange = _shorturl_get_range();
+    $key       = shorturl_encode_url($link->lid);
+    $metrics   = shorturl_statistics_metrics_data($link->lid, $dateRange['from'], $dateRange['to']);
+    $view      = shorturl_statistics_metrics_view($metrics,   $dateRange['from'], $dateRange['to']);
+    foreach ($view['data'] as $k => $item) {
+        $view['data'][$k] = array("{$view['caption']}" => $item['label']) + $item;
+        unset($view['data'][$k]['label']);
+    }
+    $filename = "shorturl-metrics-{$key}-({$view['label']}).csv";
+
+    _shorturl_output_csv($filename, $view['data']);
+}
+function shorturl_statistics_link($link)
+{
+    global $user;
+
+    if (empty($link) || empty($user)) {
+        drupal_goto('<front>');
+    }
+
+    $metric_db = _shorturl_metrics_db_name();
+
+    $key = shorturl_encode_url($link->lid);
+    drupal_set_title(t('Link details for !key', array('!key' => _shorturl_remove_https(url($key, array('absolute' => true))))));
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css', 'module', 'all');
+    $output = '';
+
+    $link_user  = user_load($link->uid);
+    $link_short = (strlen($link->orig_url) > 150) ? substr($link->orig_url, 0, 150).'...' : $link->orig_url;
+
+    $output .= '<div id="shorturl-details" class="shorturl">';
+    if (!empty($link->title)) {
+        $output .= '<h3>'.check_plain(html_entity_decode($link->title, ENT_QUOTES, 'UTF-8')).'</h3>';
+    }
+    $output .= '<p>'.l($link_short, $link->orig_url).'<br />Short URL: '.l(_shorturl_remove_https(url($key, array('absolute' => true))), _shorturl_remove_https(url($key, array('absolute' => true)))).'</p>';
+    $output .= '<p>'.number_format($link->clicks).' '.t('click throughs').'. '.t('Posted by !user on !date', array('!user' => l($link_user->name, 'shorturl/user/'.$link_user->uid), '!date' => format_date($link->created, 'medium'))).'</p>';
+    $output .= '<p>'.check_plain($link->description).'</p>';
+
+    if (user_access('administer shorturl')) {
+        $d = _shorturl_remove_https(url('shorturl/delete/'.$key, array('absolute' => true)));
+        $output .= '<p><script>function _delete(){ r=confirm("'.t('Delete this link?').'\n\n'.$d.'");if(r){window.location="'.$d.'"} }</script><input type="button" value="'.t('Delete this link').'" onclick="_delete();" /></p>';
+    }
+
+    /// the link owner can view notes
+    if ($user->uid == $link->uid || user_access('administer shorturl')) {
+        $n = url('shorturl/notes/'.$key, array('absolute' => true));
+        $output .= '<p><script>function _notes(){ '
+            .'  jQuery.ajax({ type:"get", url:"'.$n.'", data:{notes:jQuery("#shorturl_link_notes").val()}, '
+            .'      dataType:"jsonp", crossDomain:true, jsonp:"callback", '
+            .'      beforeSend:function(jqxhr,settings){jQuery("#shorturl_link_notes_button").attr("disabled","disabled");clearTimeout(document.getElementById("shorturl_link_notes_msg").to);jQuery("#shorturl_link_notes_msg").html(" ... '.t('saving').'");}, '
+            .'      success:function(data,status,jqxhr){jQuery("#shorturl_link_notes_msg").html(" '.t('saved').'");}, '
+            .'      error:function(jqxhr,status,err){jQuery("#shorturl_link_notes_msg").html(" '.t('save failed').'");}, '
+            .'      complete:function(jqxhr,status){jQuery("#shorturl_link_notes_button").removeAttr("disabled");document.getElementById("shorturl_link_notes_msg").to=setTimeout(function(){jQuery("#shorturl_link_notes_msg").html("");},3000);} '
+            .'});}</script><textarea id="shorturl_link_notes">'.filter_xss($link->notes).'</textarea>'
+            .'<br /><input id="shorturl_link_notes_button" type="button" value="'.t('Save Notes').'" onclick="_notes()" /><span id="shorturl_link_notes_msg" style="opacity:0.6;padding-left:2em;"></span></p>';
+    }
+
+    $output .= '</div>';
+
+    $site_root = url('shorturl/', array('absolute' => true));
+    //drupal_add_js(  drupal_get_path('module', 'shorturl').'/jquery-1.11.0.min.js' );
+    drupal_add_js('var site_root = "'.$site_root.'"; var link_key = "'.$key.'"', 'inline');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl_metrics_table.css', 'module', 'all');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/datepicker_bootstrap.css',   'module', 'all');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/shorturl_metrics_table.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/mootools-core.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/mootools-more.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/Locale.en-US.DatePicker.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/Picker.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/Picker.Attach.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/Picker.Date.js');
+    drupal_add_js(drupal_get_path('module',  'shorturl').'/js/Picker.Date.508.js');
+    drupal_add_js("
+     jQuery(document).ready(function () {
+        var minDate = new Date(2009,1,1);
+        var maxDate = new Date().setHours(23,59,59);
+        var calConf = function(){return{
+            startDay: 0,
+            pickerClass: 'datepicker_bootstrap',
+            days_title: function(days){ return days.format('%B %Y'); },
+            months_abbr: Date.getMsg('months'), /// full month names
+            minDate: minDate,
+            maxDate: maxDate,
+            blockKeydown: true,
+            togglesOnly: true
+        }};
+        c1 = calConf();
+        c1.toggle = $$('#fromCal');
+        var p1 = new Picker.Date508($$('#fromDate'), c1 );
+        c2 = calConf();
+        c2.toggle = $$('#toCal');
+        var p2 = new Picker.Date508($$('#toDate'),   c2 );
+        $$('#metricsRangeForm').addEvent('submit',function(event)
+        {
+          var origin = event.event.explicitOriginalTarget;
+          return ( origin && origin.get('type')=='submit' );
+        });
+      });
+  ", 'inline');
+    drupal_add_js('jQuery(document).ready(function () { vbarGraphInit("hbar-graph",{height:20,width:60}); vbarGraphNav("hbar-graph"); });', 'inline');
+
+    $dateRange = _shorturl_get_range();
+
+    $table = shorturl_statistics_metrics_table($link->lid, $dateRange['from'], $dateRange['to']);
+
+    $message = '';
+    if ($dateRange['to'] < $dateRange['from']) {
+        $message .= '<span class="metrics-view-message">Invalid Date Range</span>';
+    }
+
+    $output .= '
+  <div class="metricsdata">
+    <h3><a name="metrics"></a>Metrics by Date Range</h3>
+    <p>View a graph of clicks by date and export the data in CSV format.</p>
+    <form id="metricsForm" name="metricsForm" action="'.request_uri().'#metrics" method="post" class="metricsRange">
+      <label for="fromDate">From:</label>
+      <span class="input-wrap">
+          <input type="text" value="'.date('m/d/Y', $dateRange['from']).'" name="fromDate" id="fromDate" class="cal-date" size="12" />
+          <a href="#fromCalendarToggle" id="fromCal" class="cal-toggle"><span class="cal-icon">calendar</span></a>
+      </span>
+      <label for="toDate">To:</label>
+      <span class="input-wrap">
+          <input type="text" value="'.date('m/d/Y', $dateRange['to']).'" name="toDate"   id="toDate"   class="cal-date" size="12" />
+          <a href="#fromCalendarToggle" id="toCal" class="cal-toggle"><span class="cal-icon">calendar</span></a>
+      </span>
+      <input type="submit" class="submit" value="View Clicks" />
+      '.$message.'
+    </form>
+    <div id="metrics-chart-container" class="shorturl">'.$table.'<br style="clear:left;"/></div>
+    <div id="metrics-table-container"><br /></div>
+  </div>
+  ';
+    /*
+     * Referal statistics
+     */
+    $output .= '<div id="shorturl-referrers" class="shorturl">';
+    $output .= '<h3>'.t('Referrer Statistics').'</h3>';
+
+    /*
+     * List of all refering domains
+     */
+    $output .= '<div id="shorturl-referrers-domains" class="shorturl">';
+    $output .= '<h4>'.t('All Domains').'</h4>';
+
+    //$sql = "SELECT substring_index(referrer, '/', 3) as domain, count(aid) as clicks FROM {shorturl_access} WHERE url_id = '$link->lid' AND referrer != '' GROUP BY domain ORDER BY clicks DESC";
+    //$sql = "SELECT domain, clicks FROM {shorturl_metric_link_domain} WHERE lid = '$link->lid' ORDER BY clicks DESC";
+    $sql = "SELECT domain, clicks FROM {$metric_db}.shorturl_metric_link_domain WHERE lid = '$link->lid' ORDER BY clicks DESC";
+
+    $result = db_query($sql);
+
+    $rows = array();
+    foreach ($result as $referrer) {
+        $rows[] = array(
+            array('class' => 'referrer', 'data' => l($referrer->domain, $referrer->domain)),
+            array('class' => 'clicks', 'data' => '<div class="count">'.$referrer->clicks.'</div>'),
+        );
+    }
+    if (!$rows) {
+        $rows[] = array(array('data' => t('No referrer data is available.'), 'colspan' => '2'));
+    }
+    $header = array(t('Domain'), t('Clicks'));
+    $output .= theme_table(
+        array(
+            'header'     => $header,
+            'rows'       => $rows,
+            'attributes' => array(),
+            'sticky'     => true, // Table header will be sticky
+            'caption'    => '',
+            'colgroups'  => array(),
+            'empty'      => t('No links available.'), // The message to be displayed if table is empty
+        )
+    ).theme('pager');
+    $output .= '</div>';
+
+    /*
+     * List of top 25 referrers
+     */
+    $output .= '<div id="shorturl-referrers-top" class="shorturl">';
+    $output .= '<h4>'.t('Top 25 Referrers').'</h4>';
+
+    //$sql = "SELECT count(aid) as clicks, referrer FROM {shorturl_access} WHERE url_id = $link->lid AND referrer != '' GROUP BY referrer ORDER BY clicks DESC LIMIT 25";
+    //$sql = "SELECT clicks, referrer FROM {shorturl_metric_link_referrer} WHERE lid = $link->lid ORDER BY clicks DESC LIMIT 25";
+    $sql    = "SELECT clicks, referrer FROM {$metric_db}.shorturl_metric_link_referrer WHERE lid = $link->lid ORDER BY clicks DESC LIMIT 25";
+    $result = db_query($sql);
+
+    $rows = array();
+    foreach ($result as $referrer) {
+        $url    = (strlen($referrer->referrer) > 65) ? substr($referrer->referrer, 0, 65).'...' : $referrer->referrer;
+        $rows[] = array(
+            array('class' => 'referrer', 'data' => l($url, $referrer->referrer)),
+            array('class' => 'clicks', 'data' => '<div class="count">'.$referrer->clicks.'</div>'),
+        );
+    }
+    if (!$rows) {
+        $rows[] = array(array('data' => t('No referrer data is available.'), 'colspan' => '2'));
+    }
+    $header = array(t('Referrer'), t('Clicks'));
+    $output .= theme_table(
+            array(
+                'header'     => $header,
+                'rows'       => $rows,
+                'attributes' => array(),
+                'sticky'     => true, // Table header will be sticky
+                'caption'    => '',
+                'colgroups'  => array(),
+                'empty'      => t('No links available.'), // The message to be displayed if table is empty
+            )
+        ).theme('pager');
+    $output .= '</div>';
+    $output .= '</div>';
+
+    $output .= '</div>';
+
+    return $output;
+}
+function shorturl_delete_link($link)
+{
+    if (!empty($link)) {
+        $metric_db           = _shorturl_metrics_db_name();
+        $token               = shorturl_encode_url($link->lid);
+        $metric_ld_deleted   = db_query("DELETE FROM {$metric_db}.shorturl_metric_link_domain   WHERE lid = :lid", array(':lid' => $link->lid));
+        $metric_lr_deleted   = db_query("DELETE FROM {$metric_db}.shorturl_metric_link_referrer WHERE lid = :lid", array(':lid' => $link->lid));
+        $link_deleted        = db_query('DELETE FROM {shorturl_link}                            WHERE lid = :lid', array(':lid' => $link->lid));
+        $record_deleted      = db_query("DELETE FROM {record_shorten} WHERE service='This site' AND short LIKE '%/:token'", array(':token' => db_like($token)));
+        $destination_deleted = db_query("UPDATE {$metric_db}.shorturl_metric_destination SET links=IF(links>0, links-1,0) WHERE destmd5=MD5(:origurl)", array(':origurl' => $link->orig_url));
+    }
+    drupal_goto('<front>');
+
+    return true;
+}
+function shorturl_delete_destination($destination)
+{
+    if (!empty($destination)) {
+        $metric_db         = _shorturl_metrics_db_name();
+        $metric_ld_deleted = db_query("DELETE FROM {$metric_db}.shorturl_metric_link_domain ".
+                                'WHERE lid IN (SELECT lid FROM {shorturl_link} WHERE orig_url=:origurl)', array(':origurl' => $link->orig_url));
+        $metric_lr_deleted = db_query("DELETE FROM {$metric_db}.shorturl_metric_link_referrer ".
+                                'WHERE lid IN (SELECT lid FROM {shorturl_link} WHERE orig_url=:origurl)', array(':origurl' => $link->orig_url));
+        $metric_dn_deleted = db_query("DELETE FROM {$metric_db}.shorturl_metric_destination WHERE destmd5 = MD5(:origurl)", array(':origurl' => $link->orig_url));
+        $link_deleted      = db_query('DELETE FROM {shorturl_link}  WHERE orig_url = :origurl', array(':origurl' => $link->orig_url));
+        $record_deleted    = db_query('DELETE FROM {record_shorten} WHERE original = :origurl', array(':origurl' => $link->orig_url));
+    }
+    drupal_goto('<front>');
+
+    return true;
+}
+
+function _shorturl_output_csv($filename, $data)
+{
+    header('Content-Type: text/x-csv');
+    header('Expires: '.gmdate('D, d M Y H:i:s').' GMT');
+    header('Content-Disposition: attachment; filename="'.$filename.'"');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    header('Pragma: public');
+
+    echo _shorturl_csv_format($data);
+}
+function _shorturl_csv_format($data)
+{
+    if (empty($data)) {
+        return '';
+    }
+
+    $stream = fopen('php://memory', 'r+');
+
+    /// write out headers based on first object's parameters
+    /// reset gets us the first, and nicely preps foreach loop
+    fputcsv($stream, array_keys((array) reset($data)));
+
+    /// write out each item as a csv line
+    foreach ($data as $item) {
+        fputcsv($stream, (array) $item);
+    }
+
+    /// be sure to get from the beginning of stream
+    rewind($stream);
+    $out = stream_get_contents($stream);
+    fclose($stream);
+
+    return $out;
+}
+
+/// $fromDate and $toDate are TIMESTAMPS
+function shorturl_statistics_metrics_data($lid, $fromDate, $toDate)
+{
+    $metric_db = _shorturl_metrics_db_name();
+
+    if ($toDate < $fromDate) {
+        return array(
+            'bucket' => null,
+            'max'    => 0,
+            'sum'    => 0,
+            'data'   => array(),
+        );
+    }
+
+    $day_span   = max(0, ($toDate - $fromDate) / 86400) + 1;
+    $year_span  = max(0, intval(date('Y', $toDate)) - intval(date('Y', $fromDate)));
+    $month_span = max(0, (intval(date('m', $toDate)) + (12 * $year_span)) - (intval(date('m', $fromDate)))) + 1;
+
+    if ($day_span <= 1) {
+        return shorturl_metrics_data_by_hour($lid, $fromDate, $toDate);
+    } elseif ($day_span > 1   && $day_span <= 31) {
+        return shorturl_metrics_data_by_day($lid, $fromDate, $toDate);
+    } elseif (($day_span > 31  && $day_span <= 180) || ($month_span >= 2 && $month_span < 6)) {
+        return shorturl_metrics_data_by_week($lid, $fromDate, $toDate);
+    } elseif (($day_span > 180 && $day_span <= 365) || ($month_span >= 6 && $month_span <= 12)) {
+        return shorturl_metrics_data_by_month($lid, $fromDate, $toDate);
+    } elseif ($day_span > 365 || $month_span > 12) {
+        return shorturl_metrics_data_by_year($lid, $fromDate, $toDate);
+    }
+
+    return array(
+        'bucket' => null,
+        'max'    => 0,
+        'sum'    => 0,
+        'data'   => array(),
+    );
+}
+function shorturl_statistics_metrics_view($metrics, $fromDate, $toDate)
+{
+    $caption = 'Period';
+    $label   = 'Period';
+    $data    = array();
+
+    $fromYear  = date('Y', $fromDate);
+    $toYear    = date('Y', $toDate);
+    $fromMonth = date('F', $fromDate);
+    $toMonth   = date('F', $toDate);
+    $fromDay   = date('j', $fromDate);
+    $toDay     = date('j', $toDate);
+    if ($toDate < $fromDate) {
+        $label = '';
+    } elseif ($fromYear != $toYear) {
+        $label = "{$fromMonth} {$fromDay}, {$fromYear} - {$toMonth} {$toDay}, {$toYear}";
+    } elseif ($fromMonth != $toMonth) {
+        $label = "{$fromMonth} {$fromDay} - {$toMonth} {$toDay}, {$fromYear}";
+    } elseif ($fromDay != $toDay) {
+        $label = "{$fromMonth} {$fromDay} - {$toDay}, {$fromYear}";
+    } else {
+        $label = "{$fromMonth} {$fromDay}, {$fromYear}";
+    }
+
+    if (empty($metrics['bucket'])) {
+        $caption = '-';
+        $data    = array();
+    } elseif ($metrics['bucket'] == 'hour') {
+        $caption = 'Hour';
+        $data    = array();
+        foreach ($metrics['data'] as $k => $v) {
+            $col_label = (intval($v['label']) % 12);
+            if ($col_label == 0) {
+                $col_label = 12;
+            }
+            $col_label .= (intval($v['label']) < 12) ? 'AM' : 'PM';
+            $data[] = array('label' => $col_label, 'value' => number_format($v['clicks']), 'scale' => (($metrics['max'] > 0 && $v['clicks'] > 0) ? max(1, round(($v['clicks'] / $metrics['max']) * 100)) : '0').'%');
+        }
+    } else {
+        $caption = ucfirst($metrics['bucket']);
+        $data    = array();
+        foreach ($metrics['data'] as $k => $v) {
+            $data[] = array('label' => $v['label'], 'value' => number_format($v['clicks']), 'scale' => (($metrics['max'] > 0 && $v['clicks'] > 0) ? max(1, round(($v['clicks'] / $metrics['max']) * 100)) : '0').'%');
+        }
+    }
+
+    return array(
+        'caption' => $caption,
+        'label'   => $label,
+        'data'    => $data,
+    );
+}
+function shorturl_statistics_metrics_table($lid, $fromDate, $toDate)
+{
+    $metrics = shorturl_statistics_metrics_data($lid, $fromDate, $toDate);
+    $view    = shorturl_statistics_metrics_view($metrics, $fromDate, $toDate);
+    $key     = shorturl_encode_url($lid);
+
+    $export = '';
+    if (!($toDate < $fromDate)) {
+        $export .= '<form action="'.url('shorturl/metrics/'.$key).'" method="post"
+               ><input type="submit" value="'.t('Export to CSV').'"
+              /><input type="hidden" name="fromDate" value="'.date('m/d/Y', $fromDate).'"
+              /><input type="hidden" name="toDate" value="'.date('m/d/Y', $toDate).'" /></form>';
+    }
+
+    $output = '';
+    $output .= '<br /><span class="total-container"><span class="total">'.t('Total Clicks').':<span class="total-clicks">'.number_format($metrics['sum']).'</span></span></span>';
+    $output .= '<span class="export-container">'.$export.'</span>
+  <br style="clear:both;" />
+  <table id="hbar-graph">
+    <caption>
+        <span class="title">Clicks Per '.$view['caption'].'</span>
+    </caption>
+    <thead>
+      <tr><th scope="col" class="label"><span>'.$view['label'].'</span></th
+         ><th scope="col" class="value"><span>Clicks</span></th
+         ><th scope="col" class="scale"><span>Scale</span></th></tr>
+    </thead>
+    <tbody>
+  ';
+    foreach ($view['data'] as $row) {
+        $label = preg_replace('/^(.+?)([AP]M)?$/i', '$1</span><span class="ampm">$2', $row['label']);
+        $output .= '<tr><th scope="row" class="label"><span>'.$label.'</span></th
+                   ><td class="value"><span>'.$row['value'].'</span></td
+                   ><td class="scale"><span>'.$row['scale'].'</span></td></tr>';
+    }
+
+    // hacky stuff for small count special case graph guides
+
+    $yaxis_threshold = 20;
+    $yaxis_4         = '';
+    $yaxis_3         = '';
+    $yaxis_2         = '';
+    $yaxis_1         = '';
+    $yaxis_0         = '0';
+    $yaxis_class     = '';
+    $yaxis_4_class   = '';
+    $yaxis_3_class   = '';
+    $yaxis_2_class   = '';
+    $yaxis_1_class   = '';
+    $yaxis_0_class   = '';
+
+    if ($metrics['max'] > 0) {
+        $yaxis_4 = number_format($metrics['max']);
+        if ($metrics['max'] < $yaxis_threshold) {
+            if ($metrics['max'] == 2) {
+                $yaxis_class = 'yaxis2';
+                $yaxis_3     = '1';
+                $yaxis_2     = '0';
+                $yaxis_1     = '';
+                $yaxis_0     = '';
+            } elseif ($metrics['max'] == 3) {
+                $yaxis_class = 'yaxis3';
+                $yaxis_3     = '2';
+                $yaxis_2     = '1';
+                $yaxis_1     = '0';
+                $yaxis_0     = '';
+            } else {
+                $yaxis_3 = (abs(($metrics['max'] * .75) - round(($metrics['max'] * .75))) < 0.0001) ? number_format($metrics['max'] * .75) : '';
+                $yaxis_2 = (abs(($metrics['max'] * .50) - round(($metrics['max'] * .50))) < 0.0001) ? number_format($metrics['max'] * .50) : '';
+                $yaxis_1 = (abs(($metrics['max'] * .25) - round(($metrics['max'] * .25))) < 0.0001) ? number_format($metrics['max'] * .25) : '';
+            }
+            $yaxis_3_class = ($yaxis_3 == '') ? ' no-guide' : '';
+            $yaxis_2_class = ($yaxis_2 == '') ? ' no-guide' : '';
+            $yaxis_1_class = ($yaxis_1 == '') ? ' no-guide' : '';
+            $yaxis_0_class = ($yaxis_0 == '') ? ' no-guide' : '';
+        } else {
+            $yaxis_3 = number_format($metrics['max'] * .75);
+            $yaxis_2 = number_format($metrics['max'] * .50);
+            $yaxis_1 = number_format($metrics['max'] * .25);
+        }
+    }
+
+    $output .= '
+    </tbody>
+    <tfoot>
+      <tr class="'.$yaxis_class.$yaxis_4_class.'"><th class="label"><span>guide</span></th><td class="value"><span>'.$yaxis_4.'</span></td><td class="scale"><span>100%</span></td></tr>
+      <tr class="'.$yaxis_class.$yaxis_3_class.'"><th class="label"><span>guide</span></th><td class="value"><span>'.$yaxis_3.'</span></td><td class="scale"><span>75%</span></td></tr>
+      <tr class="'.$yaxis_class.$yaxis_2_class.'"><th class="label"><span>guide</span></th><td class="value"><span>'.$yaxis_2.'</span></td><td class="scale"><span>50%</span></td></tr>
+      <tr class="'.$yaxis_class.$yaxis_1_class.'"><th class="label"><span>guide</span></th><td class="value"><span>'.$yaxis_1.'</span></td><td class="scale"><span>25%</span></td></tr>
+      <tr class="'.$yaxis_class.$yaxis_0_class.'"><th class="label"><span>guide</span></th><td class="value"><span>'.$yaxis_0.'</span></td><td class="scale"><span>0%</span></td></tr>
+    </tfoot>
+  </table>
+  ';
+
+    return $output;
+}
+
+function shorturl_search()
+{
+    drupal_set_title('');
+
+    return drupal_get_form('shorturl_search_form');
+}
+function shorturl_search_form($form, &$form_state)
+{
+    drupal_set_title(t('Enter a long URL to search your history'));
+    $form['search_url'] = array(
+        '#type'   => 'textfield',
+        '#prefix' => '<p>'.t('Search for partial or full long URLs. For example, you can search for just .mil to find all of your short URLs that point to a .mil link.')
+            .'</p><p>'.t('You can also enter a more specific long URL, such as <a href="@url">@url</a>, to find all of your short URLs that point to this destination.', array('@url' => 'http://www.usa.gov/Agencies/State-and-Territories.shtml')).'</p>',
+        '#size'      => 60,
+        '#maxlength' => 2048,
+    );
+
+    $form['search_page']  = array('#type' => 'hidden');
+    $form['search_sort']  = array('#type' => 'hidden');
+    $form['search_order'] = array('#type' => 'hidden');
+
+    $form['submit'] = array(
+        '#type'  => 'submit',
+        '#value' => t('Search'),
+    );
+    $form['results'] = array(
+        '#type'   => 'markup',
+        '#markup' => '<br /><br /><hr />',
+    );
+    if (!empty($form_state['shorturl']['results'])) {
+        $form['results']['#markup'] = '<br /><br /><hr />'.$form_state['shorturl']['results'];
+    }
+    if (!empty($form_state['shorturl']['search_url'])) {
+        $form['search_url']['#default_value'] = $form_state['shorturl']['search_url'];
+    }
+    if (!empty($form_state['shorturl']['search_page'])) {
+        $form['search_page']['#default_value'] = $form_state['shorturl']['search_page'];
+    }
+    if (!empty($form_state['shorturl']['search_sort'])) {
+        $form['search_sort']['#default_value'] = $form_state['shorturl']['search_sort'];
+    }
+    if (!empty($form_state['shorturl']['search_order'])) {
+        $form['search_order']['#default_value'] = $form_state['shorturl']['search_order'];
+    }
+
+    return $form;
+}
+function shorturl_search_form_submit($form, &$form_state)
+{
+    $form_state['rebuild']                  = true;
+    $search                                 = !empty($form_state['values']['search_url']) ? $form_state['values']['search_url'] : '%';
+    $form_state['shorturl']['results']      = shorturl_statistics(null, $search);
+    $form_state['shorturl']['search_url']   = $form_state['values']['search_url'];
+    $form_state['shorturl']['search_page']  = $form_state['values']['search_page'];
+    $form_state['shorturl']['search_sort']  = $form_state['values']['search_sort'];
+    $form_state['shorturl']['search_order'] = $form_state['values']['search_order'];
+}
+
+function shorturl_badurl_report($user = null)
+{
+    if (empty($_GET['forsure'])) {
+        drupal_set_title(t('Bad Links Report'));
+        $username = (empty($user)) ? '' : '/'.$user->name;
+
+        return '<h3>This Report may take a long time to run.</h3> <p>Are you sure you want to run it now?</p><p>'.l(t('Yes, run report'), 'admin/reports/shorturl/baddata'.$username, array('query' => array('forsure' => 'yes'))).'</p>';
+    }
+
+    /// this won't work here
+    ini_set('max_execution_time', 0);
+    set_time_limit(0);
+
+    if (empty($user)) {
+        global $user;
+        drupal_set_title(($user->uid != 0) ? t('Your Bad Links') : t('All Bad Links'));
+        $access = 'own';
+    } else {
+        drupal_set_title(is_object($user) ? t("!username's Bad Links", array('!username' => $user->name)) : t('All Bad Links'));
+        $access = 'all';
+    }
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css', 'module', 'all');
+    $output = '';
+
+    $header = array(
+        'Info',
+        'Clicks',
+        'Date',
+    );
+
+    /// gen list of valid tlds
+    $tld_list  = variable_get('tldrestrict_tlds', '');
+    $tld_regex = '';
+    if (!empty($tld_list)) {
+        $tlds  = array_unique(explode(',', $tld_list));
+        $tlist = array();
+        foreach ($tlds as $tld) {
+            $tld = trim($tld);
+            /// make these more sql safe
+            $tlist[] = preg_replace('/(\W)/', '\\\\$1', $tld); /// slash out all the periods
+        }
+        $tld_regex = '('.implode('|', $tlist).')';
+    }
+
+    /// gen list of valid schemes
+    $scheme_list  = variable_get('shorten_schemes', '');
+    $scheme_regex = '';
+    if (!empty($scheme_list)) {
+        $schemes = array_unique(explode(',', $scheme_list));
+        $slist   = array();
+        foreach ($schemes as $scheme) {
+            $scheme = trim($scheme);
+            /// make these more sql safe
+            $slist[] = preg_replace('/(\W)/', '\\\\$1', $scheme); /// slash out all the periods
+        }
+        $scheme_regex = '('.implode('|', $slist).'):\/\/';
+    }
+
+    // metrics-ui
+    $metric_db = _shorturl_metrics_db_name();
+    $sql       = "
+        SELECT l.*, d.links
+        FROM (
+            SELECT * FROM {shorturl_link} WHERE orig_url NOT REGEXP '^{$scheme_regex}(([^\/@]*)@)?([^\/\?#]*{$tld_regex})([\/\?#].*)?' ORDER BY orig_url DESC
+        ) l
+        LEFT JOIN {$metric_db}.shorturl_metric_destination d
+        ON ( MD5(l.orig_url) = d.destmd5 )
+    ";
+
+    $result = db_query($sql);
+
+    $rows = array();
+    foreach ($result as $link) {
+        $key     = shorturl_encode_url($link->lid);
+        $target  = (is_object($user) && ($user->uid != 0)) ? $link->orig_url : $key;
+        $details = '';
+
+        $url = trim($link->orig_url);
+        if (empty($url)) {
+            $details .= 'Empty Destination Url';
+            $url = 'empty';
+        }
+
+        if (!empty($link->title)) {
+            $title = html_entity_decode($link->title, ENT_QUOTES, 'UTF-8');
+            $details .= '<div class="link">'.l($title, $link->orig_url).'</div><div class="url">'.htmlspecialchars($url).'</div>';
+        } else {
+            $title = $url;
+            $details .= '<div class="link">'.l($url, $link->orig_url).'</div>';
+        }
+
+        if (user_access('view link details')) {
+            $links = (!empty($link->links)) ? $link->links : 1;
+            if ($links == 2) {
+                $details .= '<div class="details">'.l(t('view the 2 links to this page'), 'shorturl/list/'.$key).'</div>';
+            } elseif ($links > 2) {
+                $details .= '<div class="details">'.l(t('view all !links links to this page', array('!links' => $links)), 'shorturl/list/'.$key).'</div>';
+            } else {
+                $details .= '<div class="details">'.l(t('metrics'), 'shorturl/link/'.$key).' '.t('for !url', array('!url' => _shorturl_remove_https(url($key, array('absolute' => true))))).'</div>';
+                //$details .= ' <br /> '. _shorturl_remove_https(url($key, array('absolute' => TRUE))) .'</div>';
+            }
+        }
+
+        $rows[] = array(
+            'Info'   => array('class' => 'details', 'data' => $details),
+            'Clicks' => array('class' => 'clicks', 'data' => '<div class="count">'.number_format($link->clicks).'</div>'),
+            'Date'   => array('class' => 'date', 'data' => format_date($link->created, variable_get('shorturl_date_format', 'small'), variable_get('shorturl_custom_date_format', ''))),
+        );
+    }
+
+    if (!$rows) {
+        $rows[] = array(array('data' => t('No links available.'), 'colspan' => '3'));
+    }
+
+    $output .= '<div id="shorturl-statistics" class="shorturl">';
+    $output = theme_table(
+            array(
+                'header'     => $header,
+                'rows'       => $rows,
+                'attributes' => array(),
+                'sticky'     => true, // Table header will be sticky
+                'caption'    => '',
+                'colgroups'  => array(),
+                'empty'      => t('No links available.'), // The message to be displayed if table is empty
+            )
+        ).theme('pager');
+    $output .= '</div>';
+
+    return $output;
+}
+
+function shorturl_parse_url($url, $strict = false)
+{
+    $strict_url = "/^(?:(?P<scheme>[^\:\/\?\#]+):\/\/)?(?:(?P<userinfo>(?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*(?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+)@)?(?P<host>(?:[a-z0-9\-\.\_\~]|%[0-9a-f]{2})+)?(?::(?P<port>[0-9]+))?(?P<tail>[\/\?#](?:[\w#!:\.\?\+=&@$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})*)?$/xi";
+    $simple_url = "/^(?:(?P<scheme>[^\:\/\?\#]+):\/\/)?(?:(?P<userinfo>[^\/@]*)@)?(?P<host>[^\/:?#]*)?(?::(?P<port>[0-9]+))?(?P<tail>(?P<path>[^\?\#]*?(?:\.(?P<format>[^\.\?\#]*))?)?(?:\?(?P<query>[^\#]*))?(?:#(?P<fragment>.*))?)?$/i";
+
+    $parsed = array(
+        'valid'    => false,
+        'scheme'   => '',
+        'userinfo' => '',
+        'host'     => '',
+        'port'     => '',
+        'tail'     => '',
+        'path'     => '',
+        'format'   => '',
+        'query'    => '',
+        'fragment' => '',
+    );
+
+    if (preg_match(($strict) ? $strict_url : $simple_url, $url, $url_parts)) {
+        $parsed['valid'] = true;
+        foreach (array_keys($parsed) as $k) {
+            if (isset($url_parts[$k])) {
+                $parsed[$k] = trim($url_parts[$k]);
+            }
+        }
+    }
+
+    return $parsed;
+}
+
+function _shorturl_get_url_to_shorten($form, &$form_state)
+{
+    if (isset($form_state['storage']) && isset($form_state['storage']['step'])) {
+        $step = intval($form_state['storage']['step']);
+        for ($i = $step; $i >= 0; --$i) {
+            if (!empty($form_state['values']['url_'.$i])) {
+                return $form_state['values']['url_'.$i];
+            }
+        }
+    }
+    if (!empty($form_state['values']['url'])) {
+        return $form_state['values']['url'];
+    }
+
+    return false;
+}
+
+function _shorturl_metrics_db_name()
+{
+    global $databases;
+
+    return $databases['metrics']['default']['database'];
+}
+
+function _shorturl_remove_https($url)
+{
+    if (drupal_substr($url, 0, 8) == 'https://') {
+        $url = str_replace('https://', 'http://', $url);
+    }
+
+    return $url;
+}
+
+function _shorturl_get_range()
+{
+    $mmddyyyy = '/^\s*\d\d?(\/|-|\.|\s|%2[FDE0])\d\d?\1\d\d\d\d\s*$/';
+    if (!empty($_POST['fromDate']) && preg_match($mmddyyyy, $_POST['fromDate'])) {
+        $fromDate = strtotime($_POST['fromDate']);
+    } elseif (!empty($_GET['fromDate']) && preg_match($mmddyyyy, $_GET['fromDate'])) {
+        $fromDate = strtotime($_GET['fromDate']);
+    } else {
+        // force a timezone sync with db ?
+        //$fromDate = strtotime( 'midnight', time() )-1;
+        $fromDate = time();
+    }
+    if (!empty($_POST['toDate']) && preg_match($mmddyyyy, $_POST['toDate'])) {
+        $toDate = strtotime($_POST['toDate']);
+    } elseif (!empty($_GET['toDate']) && preg_match($mmddyyyy, $_GET['toDate'])) {
+        $toDate = strtotime($_GET['toDate']);
+    } else {
+        // force a timezone sync with db ?
+        // $toDate = strtotime('midnight', time() )-1;
+        $toDate = time();
+    }
+
+    return array('to' => $toDate, 'from' => $fromDate);
+}
+
+function _shorturl_jsify_search_table($html)
+{
+    /// js-ify sorting
+    $html = preg_replace_callback('/<a .*?title="sort by.*?>/', function ($m) {
+        /// pull out just the href
+        $m[0] = preg_replace_callback('/ href="(.*?)"/', function ($h) {
+            $u = shorturl_parse_url($h[1]); //shorten_parse_url($h[1]);
+            if (!empty($u['query'])) {
+                $query = html_entity_decode($u['query']);
+                $sort = '';
+                $order = '';
+                $params = preg_split('/&(?!amp;)/', $query);
+                foreach ($params as $p) {
+                    list($k, $v) = explode('=', $p);
+                    if ($k == 'sort') {
+                        $sort = $v;
+                    }
+                    if ($k == 'order') {
+                        $order = $v;
+                    }
+                }
+
+                return " href=\"javascript:sortSearchResults('{$sort}','{$order}')\"";
+            }
+
+            return $h[0];
+        }, $m[0]);
+
+        return $m[0];
+    }, $html);
+
+    $html = preg_replace_callback('/<li class="pager.*">\s*?<a .*?title="Go to .*?>/', function ($m) {
+        /// pull out just the href
+        $m[0] = preg_replace_callback('/ href="(.*?)"/', function ($h) {
+            $u = shorturl_parse_url($h[1]); // shorten_parse_url($h[1]);
+            if (!empty($u['query'])) {
+                $query = html_entity_decode($u['query']);
+                $page = '';
+                $params = preg_split('/&(?!amp;)/', $query);
+                foreach ($params as $p) {
+                    list($k, $v) = explode('=', $p);
+                    if ($k == 'page') {
+                        $page = $v;
+                    }
+                }
+
+                return " href=\"javascript:pageSearchResults('{$page}')\"";
+            }
+
+            return $h[0];
+        }, $m[0]);
+
+        return $m[0];
+    }, $html);
+
+    return '<script>'.
+    '    function sortSearchResults(s,o)'.
+    '    {'.
+    '       document.querySelector("input[name=search_sort]").value  = s; '.
+    '       document.querySelector("input[name=search_order]").value = o; '.
+    '       document.querySelector("input[name=search_page]").value  = 0; '.
+    '       document.querySelector("#shorturl-search-form").submit(); '.
+    '    }'.
+    '    function pageSearchResults(p)'.
+    '    {'.
+    '       document.querySelector("input[name=search_page]").value = p; '.
+    '       document.querySelector("#shorturl-search-form").submit(); '.
+    '    }'.
+    '</script>'.
+    $html;
+}
+
+function _shorturl_urldata($url)
+{
+    $contents = _shorturl_geturl($url);
+
+    $result = array(
+      'title'       => null,
+      'description' => null,
+      'keywords'    => null,
+      'meta_tags'   => array(),
+  );
+
+    if (empty($contents) || !is_string($contents)) {
+        return $result;
+    }
+
+    $title       = '';
+    $description = '';
+    $meta_tags   = array();
+
+    $desc_attrs  = array('description', 'dc.description', 'dcterms.description');
+    $title_attrs = array('html title',  'dc.title',       'dcterms.title');
+    $words_attrs = array('keywords',    'dc.keywords',    'dcterms.keywords', 'dc.subject', 'dcterms.subject');
+
+    $title_match = array();
+    preg_match('/<title[^>]*>([^<]*)<\/title>/i', $contents, $title_match);
+    if (count($title_match)) {
+        $meta_tags['html title'] = array(
+        'html'  => htmlentities($title_match[0]),
+        'value' => strip_tags($title_match[1]),
+    );
+    }
+
+    if (preg_match_all('/<\s*meta\s(.*?)\/>/si', $contents, $meta_match)) {
+        foreach ($meta_match[1] as $meta_key => $meta) {
+            if (preg_match('/\b(name|property)=(["\'])((\\\\\2|[^\2])*?)\2/si', $meta, $name_match)) {
+                $value_match = array();
+                if (preg_match('/\bcontent=(["\'])((\\\\\1|[^\1])*?)\1/si', $meta, $value_match)) {
+                    $meta_tags[strtolower($name_match[3])] = array(
+                      'html'  => htmlentities($meta_match[0][$meta_key]),
+                      'value' => $value_match[2],
+                  );
+                    if (preg_match('/\W?description$/i', $name_match[3])) {
+                        $desc_attrs[] = strtolower($name_match[3]);
+                    }
+                    if (preg_match('/\W?title$/i', $name_match[3])) {
+                        $title_attrs[] = strtolower($name_match[3]);
+                    }
+                    if (preg_match('/\W?(keywords|subject)$/i', $name_match[3])) {
+                        $words_attrs[] = strtolower($name_match[3]);
+                    }
+                }
+            }
+        }
+    }
+
+    $result['meta_tags'] = $meta_tags;
+
+    foreach ($desc_attrs as $k) {
+        if (!empty($result['meta_tags'][$k])) {
+            $result['description'] = &$result['meta_tags'][$k]['value'];
+            break;
+        }
+    }
+
+    foreach ($title_attrs as $k) {
+        if (!empty($result['meta_tags'][$k])) {
+            $result['title'] = &$result['meta_tags'][$k]['value'];
+            break;
+        }
+    }
+
+    foreach ($words_attrs as $k) {
+        if (!empty($result['meta_tags'][$k])) {
+            $result['keywords'] = &$result['meta_tags'][$k]['value'];
+            break;
+        }
+    }
+
+    return $result;
+}
+
+function _shorturl_geturl($url, $maximumRedirections = null, $currentRedirection = 0)
+{
+    if (empty($url)) {
+        return '';
+    }
+
+    $saved_http_stream_timeout = null;
+    $stream_defaults           = stream_context_get_options(stream_context_get_default());
+    if (!empty($stream_defaults['http']) && isset($stream_defaults['http']['timeout'])) {
+        $saved_http_stream_timeout = $stream_defaults['http']['timeout'];
+    }
+
+    /// headers should come back super fast
+    stream_context_set_default(array('http' => array('timeout' => 2.0)));
+    /// if we can't resolve url, that's ok it might be some internal sharepoint link
+    $http_headers = @get_headers($url, 1);
+    if (empty($http_headers)) {
+        return '';
+    }
+    /// don't bother pulling content on binary files - only want html to look for a description
+    $type = null;
+    if (!empty($http_headers['Content-Type'])) {
+        $ct = &$http_headers['Content-Type'];
+        if (is_array($ct)) {
+            $type = $ct[count($ct) - 1];
+        } elseif (is_string($ct)) {
+            $type = $ct;
+        }
+    }
+    /// if content-type included either, meh, good enough to continue on
+    if (!(empty($type) || stristr($type, 'text') || stristr($type, 'html'))) {
+        return '';
+    }
+    /// maybe some sites load slow
+    stream_context_set_default(array('http' => array('timeout' => 5.0)));
+    $max_length = 262144; /// one quarter meg of html should get the whole header
+    $contents   = @file_get_contents($url, false, null, -1, $max_length);
+
+    /// reset default http steam timeout
+    stream_context_set_default(array('http' => array('timeout' => $saved_http_stream_timeout)));
+
+    // Check if we need to go somewhere else via meta refresh
+    if (isset($contents) && is_string($contents)) {
+        preg_match_all('/<[\s]*meta[\s]*http-equiv="?REFRESH"?'.'[\s]*content="?[0-9]*;[\s]*URL[\s]*=[\s]*([^>"]*)"?'.'[\s]*[\/]?[\s]*>/si', $contents, $match);
+        if (isset($match) && is_array($match) && count($match) == 2 && count($match[1]) == 1) {
+            if (!isset($maximumRedirections) || $currentRedirection < $maximumRedirections) {
+                return _shorturl_geturl($match[1][0], $maximumRedirections, ++$currentRedirection);
+            }
+        }
+    }
+
+    return $contents;
+}
+
+function _shorturl_reserved_tokens()
+{
+    $reserved_settings = variable_get('shorturl_reserved_tokens', array());
+
+    $reserved_system = array('node', 'admin', 'term', 'user');
+
+    return $reserved_system + $reserved_settings;
+}
+
+function _shorturl_check_availability($token)
+{
+    $reserved = _shorturl_reserved_tokens();
+
+    foreach ($reserved as $key) {
+        if (stripos($token, $key) !== false) {  // contains reserved word!
+            return false;
+        }
+    }
+
+    $menu_handler = menu_get_item($token);
+    if (!empty($menu_handler)) {
+        return false;
+    } // there's already a handler for this path!
+
+    $alias_found = db_query('SELECT count(*) FROM {url_alias} WHERE alias = :token', array(':token' => $token))->fetchField();
+
+    if (!empty($alias_found)) {
+        return false;
+    } // such alias already exists!
+
+    return true;
+}
+
+function _shorturl_set_link_notes_ajax($link)
+{
+    global $user;
+
+    if (empty($link)) {
+        _jsonp(array('success' => false, 'msg' => 'no link'));
+
+        return;
+    }
+
+    $n = false;
+    if (isset($_POST['notes'])) {
+        $n = $_POST['notes'];
+    } elseif (isset($_GET['notes'])) {
+        $n = $_GET['notes'];
+    }
+    if ($n === false) {
+        _jsonp(array('success' => false, 'msg' => 'no notes'));
+
+        return;
+    }
+
+    if ($user->uid == $link->uid) {
+        $success    = false;
+        $qry_result = db_update('shorturl_link')
+            ->fields(array(
+                    'notes' => $n,
+                    ))
+             ->condition('lid', $link->lid)
+             ->execute();
+
+        if ($qry_result == 1) {
+            $success = true;
+        }
+        $notes = db_query('SELECT notes FROM {shorturl_link} WHERE lid = :lid', array(':lid' => $link->lid))->fetchField();
+        _jsonp(array('success' => $success, 'notes' => filter_xss($notes)));
+
+        return;
+    }
+
+    _jsonp(array('success' => false, 'msg' => 'not authorized'));
+}
+
+function _jsonp($response, $callback = 'callback')
+{
+    drupal_add_http_header('Content-Type', 'application/javascript');
+    $c = false;
+    if (isset($_POST['callback'])) {
+        $c = $_POST['callback'];
+    } elseif (isset($_GET['callback'])) {
+        $c = $_GET['callback'];
+    }
+    if (!empty($c)) {
+        echo $c.'(';
+    }
+    echo drupal_json_encode($response);
+    if (!empty($c)) {
+        echo ');';
+    }
+}

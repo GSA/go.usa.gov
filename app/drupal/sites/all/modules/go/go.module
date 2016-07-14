@@ -1,0 +1,331 @@
+<?php
+// $Id$
+
+/**
+ * Builds a form which allows shortening of a URL via the UI.
+ */
+function go_form_alter(&$form, $form_state, $form_id)
+{
+    if ($form_id == 'shorten_form_shorten') {
+        if (!empty($_SESSION['original'])) {
+            $form['shortened_url']['#weight'] = -2;
+
+            $form['original_url'] = array(
+              '#type'          => 'textfield',
+              '#title'         => t('Long URL'),
+              '#default_value' => check_plain($_SESSION['original']),
+              '#weight'        => -1,
+            );
+            unset($_SESSION['original']);
+
+            $form['url']['#title'] = t('Shorten Another URL');
+        }
+
+        $form['#submit'][] = 'go_form_shorten_submit';
+
+        return $form;
+    }
+}
+
+/**
+ * Submit function for the Shorten form.
+ */
+function go_form_shorten_submit($form, &$form_state)
+{
+    // $url_field = 'url_' . $form_state['storage']['step'];
+    // $url = $form_state['values'][$url_field];
+
+    $url                  = _shorturl_get_url_to_shorten($form, $form_state);
+    $_SESSION['original'] = $url;
+}
+
+/**
+ * @return array
+ *
+ * @param array      $src
+ * @param array      $in
+ * @param int|string $pos
+ */
+function array_push_after($src, $in, $pos)
+{
+    if (is_int($pos)) {
+        $R = array_merge(array_slice($src, 0, $pos + 1), $in, array_slice($src, $pos + 1));
+    } else {
+        foreach ($src as $k => $v) {
+            $R[$k] = $v;
+            if ($k == $pos) {
+                $R = array_merge($R, $in);
+            }
+        }
+    }
+
+    return $R;
+}
+
+/**
+ * Implementation of the hook_menu().
+ * Creates a tab in user setting page.
+ */
+function go_menu()
+{
+
+  //date_default_timezone_set('UTC');
+
+    $items = array();
+
+    $items['admin/user/user/userdetails'] = array(
+     'title'            => 'Export user details',
+     'page callback'    => 'user_details',
+     'access arguments' => array('access administration menu'),
+     'type'             => MENU_LOCAL_TASK,
+    );
+
+    $items['user/%user/reset_key'] = array(
+    'title'            => 'Reset API Key',
+    'description'      => 'Reset API Key',
+    'page callback'    => 'reset_key_page',
+    'page arguments'   => array(1),  // passes the %user object (wildcard) to $account for go_new_key_form_access($account)
+    'load arguments'   => array(1),  // passes the %user object (wildcard) to $account for go_new_key_form_access($account)
+    'access callback'  => 'reset_key_form_access',
+    'access arguments' => array(1),
+    'type'             => MENU_LOCAL_TASK,
+    'weight'           => 5,
+  );
+
+    return $items;
+}
+
+function user_details()
+{
+    return drupal_get_form('user_emails_form');
+}
+
+//Creates a form for the date input.
+function user_emails_form()
+{
+    $form = array();
+
+    $form['export_csv'] = array(
+      '#type'    => 'fieldset',
+        '#title' => t('Export to CSV'),
+    );
+
+    $form['export_csv']['start_date'] = array(
+        '#type'  => 'date',
+        '#title' => t('Enter start date'),
+     );
+
+    $form['export_csv']['end_date'] = array(
+        '#type'  => 'date',
+        '#title' => t('Enter end date'),
+    );
+
+    $form['export_csv']['submit'] = array(
+        '#type'  => 'submit',
+        '#value' => t('Export to CSV'),
+    );
+
+    return $form;
+}
+
+//form_set_error allows us to stop the form from being submitted, and display an error to the user on the page.
+function user_emails_form_validate(&$form, &$form_state)
+{
+    $sd     = $form_state['values']['start_date'];
+    $ed     = $form_state['values']['end_date'];
+    $s_date = mktime(0, 0, 0, $sd['month'], $sd['day'], $sd['year']);
+    $e_date = mktime(0, 0, 0, $ed['month'], $ed['day'], $ed['year']);
+
+    if ($e_date < $s_date) {
+        form_set_error('end_date', t('You must enter a valid date range.'));
+    }
+
+    return;
+}
+
+function user_emails_form_submit(&$form, &$form_state)
+{
+    $sd     = $form_state['values']['start_date'];
+    $ed     = $form_state['values']['end_date'];
+    $s_date = mktime(0, 0, 0, $sd['month'], $sd['day'], $sd['year']);
+    $e_date = mktime(0, 0, 0, $ed['month'], $ed['day'], $ed['year']);
+
+    return export_csv($s_date, $e_date);
+}
+
+function export_csv($s_date, $e_date)
+{
+    /// tried to match advuser module's format
+
+  $status  = array(t('blocked'), t('active'));
+    $roles = user_roles(1);
+    unset($roles[DRUPAL_AUTHENTICATED_RID]);
+
+    header('Content-Type: text/x-csv');
+    header('Expires: '.gmdate('D, d M Y H:i:s').' GMT');
+    header('Content-Disposition: attachment; filename=email_list.csv');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    header('Pragma: public');
+
+    $source = 'uid,name,email,status,roles,created,access,member for,last access';
+    $source .= "\n";
+
+    $result = db_query('
+    SELECT DISTINCT
+        u.uid, u.name, u.mail, u.status, u.created, u.access, GROUP_CONCAT(r.name) as roles
+    FROM
+        {users} u
+        LEFT JOIN {users_roles} ur ON u.uid = ur.uid
+        LEFT JOIN {role} r         ON r.rid = ur.rid
+    WHERE
+        u.uid != 0
+        AND u.created BETWEEN :sdate AND :edate
+    GROUP BY u.uid
+  ', array(':sdate' => $s_date, ':edate' => $e_date));
+
+    foreach ($result as $account) {
+        $source .=  '"'.$account->uid.'"';
+        $source .= ',"'.$account->name.'"';
+        $source .= ',"'.$account->mail.'"';
+        $source .= ',"'.$status[$account->status].'"';
+        $source .= ',"'.$account->roles.'"';
+        $source .= ',"'.$account->created.'"';
+        $source .= ',"'.$account->access.'"';
+        $source .= ',"'.format_interval(time() - $account->created).'"';
+        $source .= ',"'.($account->access ? t('@time ago', array('@time' => format_interval(time() - $account->access))) : t('never')).'"';
+        $source .= "\n";
+    }
+    echo $source;
+    exit;
+}
+
+/*
+ * Access callback function for user/%user/reset_key menu path
+ */
+function reset_key_form_access($account)
+{
+    global $user;
+  // only able to Reset API Key for yourself, or admin rights
+  if ($user->uid == $account->uid  ||  user_access('access user profiles')) {
+      return true;
+  }
+
+    return false;
+}
+/*
+ * Page to embed the Reset API Key form (button).
+ */
+function reset_key_page($account)
+{
+
+  // %user is passed to $account as argument
+  $new_apiKey = md5($account->name.time());
+  // store these values to load into the form processing
+  $_SESSION['new_key']['uid']      = $account->uid;
+    $_SESSION['new_key']['aipKey'] = $new_apiKey;
+
+    return drupal_get_form('reset_key_form');
+}
+/*
+ * Reset API Key form (button).
+ */
+function reset_key_form($form_state)
+{
+    $form['new_apiKey'] = array(
+    '#type'  => 'hidden',
+    '#value' => $_SESSION['new_key']['aipKey'],
+  );
+
+  // submit button at bottom
+  $form['actions']['submit'] = array(
+    '#type'  => 'submit',
+    '#value' => t('Reset apiKey'),
+  );
+
+    return $form;
+}
+/*
+ * Reset API Key form (button) Processing.
+ */
+function reset_key_form_submit($form, &$form_state)
+{
+    $account = user_load($_SESSION['new_key']['uid']); // load the user account you want to change
+
+  $update = array(                                     // build the array of keys/values to update ONLY
+    'apiKey' => $_SESSION['new_key']['aipKey'],
+  );
+
+    $updated_apiKey = user_save($account, $update);
+  // this can be removed, but it does reflect a nice feedback message
+  drupal_set_message(t('The API Key has been reset - '.$updated_apiKey->apiKey));
+
+    $_REQUEST['destination'] = 'user/'.$_SESSION['new_key']['uid'];
+    unset($_SESSION['new_key']);
+}
+/** Implementation of hook_user */
+function go_user_presave(&$edit, $account, $category)
+{
+    $edit['data']['apiKey'] = $apiKey = md5($account->name.time());
+}
+function go_user_view($account)
+{
+    $req = "'".preg_replace('/^https?:/', '', url('api/shorten.jsonp', array('absolute' => true)))
+            .'?login='.str_replace("'", "\'", urlencode($account->name))
+            .'&apiKey='.str_replace("'", "\'", urlencode($account->data['apiKey']))
+            ."&longUrl='+encodeURIComponent(location.href)";
+    $bookmarklet_link = "<a href=\"javascript:(function(){try{
+        var url = {$req};
+        function shortenReadyStateChange () {
+        	if ('readyState' in xhr && (xhr.readyState != 4 || xhr.status != 200)) return;
+            try { eval('var r = ' + xhr.responseText); } catch (e) { var r = {}; }
+            try { var short_url = r.response.data.entry[0].short_url; } catch (e) { var short_url = ''; }
+            if('response' in r && 'errorCode' in r.response){switch(r.response.errorCode)
+            {
+                case '1207':
+                    alert('The URL you tried to shorten is not allowed.\\n\\nReturn to ".variable_get('site_name', 'Drupal')." for a listing of valid domains');
+                    break;
+                case '1102':
+                    alert('Your bookmarlet login is invalid.\n\nReturn to ".variable_get('site_name', 'Drupal')." to regenerate your bookmarklet');
+                    break;
+                case '1105':
+                    alert('Your bookmarlet credentials are invalid.\\n\\nReturn to ".variable_get('site_name', 'Drupal')." to regenerate your bookmarklet');
+                    break;
+                case '1214':
+                    prompt('The URL you tried to shorten is already a short ".variable_get('site_name', 'Drupal')." URL', short_url );
+                    break;
+                default:
+                    alert('There was an error when trying to shorten the URL.\\n\\n'+ r.response.errorMessage );
+            }} else if ( short_url ) {
+                prompt('New ".variable_get('site_name', 'Drupal')." shortened URL', short_url );
+            } else {
+                console.error('Bookmarklet shorten response unusable',r);
+            }
+        };
+        if (new XMLHttpRequest().withCredentials === undefined) {
+            var xhr       = new XDomainRequest();
+            if ( ! xhr ) { console.error('Bookmarklet cannot send shorten requests'); return; };
+            xhr.onload    = shortenReadyStateChange;
+            xhr.onerror   = function() { console.error('Bookmarklet shorten request failed'); };
+            xhr.ontimeout = function() { console.error('Bookmarklet shorten request timeout'); };
+            xhr.open('GET', url);
+        } else {
+            var xhr = new XMLHttpRequest();
+            if ( ! xhr ) { console.error('Bookmarklet cannot send shorten requests'); return; };
+            xhr.onreadystatechange = shortenReadyStateChange;
+            xhr.open('GET', url, true);
+        }
+        xhr.send();
+    }catch(e){console.error(e);}})();\">".variable_get('site_name', 'Drupal').' URL Shorten</a> &laquo; drag to bookmark bar';
+    $bookmarklet_link = preg_replace('/\s\s+/', ' ', $bookmarklet_link);
+
+    $account->content['summary']['apikey'] = array(
+        '#type'   => 'user_profile_item',
+        '#title'  => t('API Key'),
+        '#markup' => $account->data['apiKey'],
+      );
+    $account->content['summary']['shorten_bookmarklet'] = array(
+        '#type'   => 'user_profile_item',
+        '#title'  => t('Bookmarklet'),
+        '#markup' => $bookmarklet_link, );
+  //  }
+}

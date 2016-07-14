@@ -1,0 +1,6 @@
+; $Id: tldrestrict.info,v 1.2 2009/07/23 19:21:10 seanr Exp $
+name = TLD Restriction
+description = Restrict shorturls to specified top level domains (TLDs).
+dependencies[] = shorten
+core = 7.x
+package = CTAC
