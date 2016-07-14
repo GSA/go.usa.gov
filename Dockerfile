@@ -1,3 +1,22 @@
 FROM ctac/drupal-base:7
 
+# Inject Consul Template
+ENV CONSUL_TEMPLATE_VERSION 0.15.0
+
 COPY app/drupal/sites /var/www/html/sites
+
+## S6 managed consul-template to generate env files
+
+ADD https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip /
+
+RUN unzip -d / /consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip && \
+    mv /consul-template /usr/local/bin/consul-template &&\
+    rm -rf /consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip && \
+    mkdir -p /consul-template /consul-template/config.d /consul-template/templates
+
+COPY consul-template/config.d /consul-template/config.d/
+COPY consul-template/templates /consul-template/templates/
+
+COPY s6 /etc/services.d/
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
