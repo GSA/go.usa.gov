@@ -1,0 +1,6 @@
+#!/usr/bin/with-contenv /bin/sh
+
+# Sleep 3sec to allow nignx to start before changing the config again
+
+sleep 3
+exec /usr/local/bin/consul-template -config=/consul-template/config.d

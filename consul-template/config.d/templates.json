@@ -1,0 +1,23 @@
+template {
+  source = "/consul-template/templates/00-drupal-s3fs.ctmpl"
+  destination = "/etc/nginx/sites-include/00-drupal-s3fs"
+  command = "/usr/sbin/service nginx reload"
+}
+
+template {
+  source = "/consul-template/templates/cli-zz-php.ini.ctmpl"
+  destination = "/etc/php/7.0/cli/conf.d/zz-php.ini"
+  command = "/usr/sbin/service php7.0-fpm reload"
+}
+
+template {
+  source = "/consul-template/templates/fpm-zz-php.ini.ctmpl"
+  destination = "/etc/php/7.0/fpm/conf.d/zz-php.ini"
+  command = "/usr/sbin/service php7.0-fpm reload"
+}
+
+template {
+  source = "/consul-template/templates/env.php.ctmpl"
+  destination = "/etc/php/env.php"
+  command = "/usr/sbin/service php7.0-fpm reload"
+}
