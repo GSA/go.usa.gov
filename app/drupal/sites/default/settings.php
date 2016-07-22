@@ -28,7 +28,7 @@ $databases = array (
 );
 $databases['default']['metrics'] =& $databases['metrics']['default'];
 $drupal_hash_salt = getenv('DRUPAL_HASHSALT');
-//$cookie_domain    = '.usa.dev';
+//$cookie_domain    = '.ctacdev.com';
 
 $update_free_access = FALSE;
 ini_set('session.gc_probability',  1);
