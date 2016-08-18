@@ -1,0 +1,7 @@
+    location ~* ^/sites/default/files/private/ {
+      return 404;
+    }
+
+    location ~* ^/sites/default/files/backup_migrate/ {
+      return 404;
+    }
