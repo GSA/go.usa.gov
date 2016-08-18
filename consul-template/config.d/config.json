@@ -8,5 +8,5 @@ retry = "10s"
 log_level = "err"
 vault {
   address = "http://10.151.228.64:8200"
-  renew = true
+  renew = false
 }
