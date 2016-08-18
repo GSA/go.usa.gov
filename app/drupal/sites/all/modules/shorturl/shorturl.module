@@ -625,7 +625,7 @@ function shorturl_statistics_export($user = null)
 			keywords    as 'Keywords',
 			notes       as 'Notes',
 			clicks      as 'Clicks',
-			DATE_FORMAT('%m-%d-%Y',created) as 'Created',
+			DATE_FORMAT(FROM_UNIXTIME(created),'%m-%d-%Y') as 'Created',
 			uid         as 'User ID',
 			''          as 'Short URL'
 		FROM
