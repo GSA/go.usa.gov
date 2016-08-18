@@ -4,6 +4,7 @@ FROM ctac/drupal-base:7
 ENV CONSUL_TEMPLATE_VERSION 0.15.0
 
 COPY app/drupal/sites /var/www/html/sites
+COPY docker/drupal/rootfs/etc/nginx/sites-includes /etc/nginx/sites-include
 RUN chown -R www-data:www-data /var/www/html
 
 ## S6 managed consul-template to generate env files
