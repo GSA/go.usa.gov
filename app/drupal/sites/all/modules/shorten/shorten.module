@@ -152,6 +152,7 @@ function shorten_url($original = '', $service = '', $cooldown = 0 )
     }
     $original_for_caching = urlencode($original); // https://www.drupal.org/node/2324925
 
+    $allow_duplicates = null;
     if ( $cooldown )
     {
         $result = db_query(
@@ -744,8 +745,8 @@ function shorten_save_js($form, $form_state)
     $step                             = $form_state['storage']['step'];
     $new_form                         = array();
     $new_form['opendiv']              = $form['opendiv'];
-    $new_form['shortened_url_'.$step] = $form['shortened_url_'.$step];
-    $new_form['url_'.$step]           = $form['url_'.$step];
+    $new_form['shortened_url_'.$step] = isset($form['shortened_url_'.$step]) ? $form['shortened_url_'.$step] : '';
+    $new_form['url_'.$step]           = isset($form['url_'.$step])           ? $form['url_'.$step]           : '';
     $new_form['yourlinks']            = $form['yourlinks'];
     $new_form['closediv']             = $form['closediv'];
 
