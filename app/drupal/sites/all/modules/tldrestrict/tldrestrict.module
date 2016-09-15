@@ -44,24 +44,40 @@ function tldrestrict_shorten_validate($form, &$form_state)
     /// get tlds
     //$tld_list = variable_get('tldrestrict_tlds', '');
     //$allowed_tlds = array_unique(explode(',', $tld_list));
-    $allowed_tlds = array_unique(array_map('trim',explode(',',variable_get('tldrestrict_tlds',''))));
-    $tlds = '';
-    if ( !empty($allowed_tlds) )
+    if ( isset($form_state['storage']) && isset($form_state['storage']['step']) )
     {
-        $last = count($allowed_tlds)-1;
-        for ( $t=0; $t<=$last; $t++ )
-        {
-           $tlds .= $t>0 ? ', ' : '';
-           $tlds .= $t==$last ? 'or ':'';
-           $tlds .= '.'.$allowed_tlds[$t];
-        }
+        $url_field = 'url_' . $form_state['storage']['step'];
+    } else {
+        watchdog('url_validate','Function tldrestrict_shorten_validate() could not find the storage step in the form submission. defaulting to (url_0).',
+                 [],WATCHDOG_CRITICAL);
+	    $url_field = 'url_0';
     }
-	$url_field = 'url_' . $form_state['storage']['step'];
-	$url = $form_state['values'][$url_field];
+
+    if ( isset($form_state['values']) && isset($form_state['values'][$url_field]) )
+    {
+        $url = $form_state['values'][$url_field];
+    } else {
+        watchdog('url_validate','Function tldrestrict_shorten_validate() could not find a url in the form submission. Looked for (:url_field). dsm(:dsm)',
+                 [':url_field'=>$url_field,':dsm'=>print_r(array_keys($form_state['values']),1)],WATCHDOG_CRITICAL);
+        form_set_error('url', t('Please enter a url.') );
+        return;
+    }
 
     if ( ! tldrestrict_url_host_allowed($url) )
     {
-      form_set_error('url', t('A valid URL ends in !tlds.', array('!tlds'=>$tlds) ) );
+        $allowed_tlds = array_unique(array_map('trim',explode(',',variable_get('tldrestrict_tlds',''))));
+        $tlds = '';
+        if ( !empty($allowed_tlds) )
+        {
+            $last = count($allowed_tlds)-1;
+            for ( $t=0; $t<=$last; $t++ )
+            {
+               $tlds .= $t>0 ? ', ' : '';
+               $tlds .= $t==$last ? 'or ':'';
+               $tlds .= '.'.$allowed_tlds[$t];
+            }
+        }
+        form_set_error('url', t('A valid URL ends in !tlds.', array('!tlds'=>$tlds) ) );
     }
 }
 
