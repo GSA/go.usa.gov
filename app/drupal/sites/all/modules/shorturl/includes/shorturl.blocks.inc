@@ -57,7 +57,7 @@ function _shorturl_get_totals_block_content()
 {
     $metric_db = _shorturl_metrics_db_name();
     $all_links  = db_query('SELECT COUNT(lid) FROM {shorturl_link}')->fetchField();
-    $all_clicks = db_query("SELECT COUNT(aid) FROM {$metric_db}.shorturl_access")->fetchField();
+    $all_clicks = db_query("SELECT access_count FROM {$metric_db}.shorturl_access_count WHERE count_id = 0")->fetchField();
 
     $ret = '<p>'.t('!site has shortened !links URLs that have been clicked !clicks times.', array('!site' => variable_get('site_name', 'Drupal'), '!links' => '<strong>'.number_format($all_links).'</strong>', '!clicks' => '<strong>'.number_format($all_clicks).'</strong>')).'</p>';
 
