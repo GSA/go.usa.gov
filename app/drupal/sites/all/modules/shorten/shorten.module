@@ -237,8 +237,8 @@ function shorten_url($original = '', $service = '', $cooldown = 0 )
         // Only cache failed retrievals for a limited amount of time.
         if ($url == $original) {
             $expire = REQUEST_TIME + variable_get('shorten_cache_fail_duration', 1800);
-        } elseif (is_numeric($cache_duration)) {
-            $expire = REQUEST_TIME + variable_get('shorten_cache_duration', 1814400);
+        //} elseif (is_numeric($cache_duration)) {
+        //    $expire = REQUEST_TIME + variable_get('shorten_cache_duration', 1814400);
         } else {
             $expire = CACHE_PERMANENT;
         }
