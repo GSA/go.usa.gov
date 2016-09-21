@@ -200,6 +200,11 @@ function shorturl_init()
                 watchdog_exception('shorturl', $e, 'Error inserting shorturl_access clickthrough, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $token, '%lid' => $lid, '%orig_url' => $orig_url, '%ref' => $referrer), WATCHDOG_ERROR);
             }
 
+            try {
+                @db_query("UPDATE {$metric_db}.shorturl_access_count SET access_count = access_count + 1 WHERE count_id = 0");
+            } catch (Exception $e) {
+                watchdog_exception('shorturl', $e, 'Error updating shorturl_access_count, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $token, '%lid' => $lid, '%orig_url' => $orig_url, '%ref' => $referrer), WATCHDOG_ERROR);
+            }
 
             $click = array(
                 // 'iid'         => $iid,

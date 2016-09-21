@@ -4,7 +4,22 @@ function shorturl_metrics_cron()
 {
     shorturl_metrics_create_monthly_tables();
     shorturl_metrics_create_monthly_tables(strtotime('next month'));
+    shorturl_metrics_recount_access();
 }
+
+function shorturl_metrics_recount_access()
+{
+    try {
+        $metric_db = _shorturl_metrics_db_name();
+        @db_query("REPLACE INTO {$metric_db}.shorturl_access_count SELECT 0,COUNT(aid) FROM {$metric_db}.shorturl_access");
+        return true;
+    } catch (Exception $e) {
+        watchdog('shorturl', 'Error updating shorturl_access_count', [], WATCHDOG_ERROR);
+        return false;
+    }
+    return null;
+}
+
 function shorturl_metrics_create_monthly_tables($when = null)
 {
     if (empty($when)) {
@@ -67,7 +82,7 @@ function shorturl_metrics_create_monthly_tables($when = null)
 function shorturl_shorturl_clickthrough($click)
 {
     if (variable_get('shorturl_track_clicks', 1) && !shorturl_metrics_is_bot($click['browser'])) {
-        $transaction = db_transaction();
+        // $transaction = db_transaction();
 
         try {
             @db_query('UPDATE {shorturl_link} SET clicks = clicks + 1 WHERE lid = :lid', array(':lid' => $click['lid']));

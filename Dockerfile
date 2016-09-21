@@ -4,6 +4,7 @@ FROM ctac/drupal-base:7
 ENV CONSUL_TEMPLATE_VERSION 0.15.0
 
 COPY app/drupal/sites /var/www/html/sites
+COPY app/drupal/misc /var/www/html/misc
 COPY docker/drupal/rootfs/etc/nginx/sites-include /etc/nginx/sites-include
 RUN chown -R www-data:www-data /var/www/html
 
