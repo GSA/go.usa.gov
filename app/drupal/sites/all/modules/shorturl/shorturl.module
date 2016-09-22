@@ -169,7 +169,7 @@ function shorturl_init()
 
             $referrer  = (empty($_SERVER['HTTP_REFERER']))    ? '' : $_SERVER['HTTP_REFERER'];
             $ref       = shorturl_parse_url($referrer);
-            $remote_ip = (empty($_SERVER['REMOTE_ADDR']))     ? '' : $_SERVER['REMOTE_ADDR'];
+            $remote_ip = _shorturl_get_remote_ip();
             $browser   = (empty($_SERVER['HTTP_USER_AGENT'])) ? '' : $_SERVER['HTTP_USER_AGENT'];
 
             $domain      = (!empty($ref['scheme']) ? $ref['scheme'].'://' : '').$ref['host'];
@@ -553,7 +553,7 @@ function shorturl_shorten($long_url)
     }
 
     $found_vacant = false;
-    $remote_ip    = (empty($_SERVER['REMOTE_ADDR'])) ? '' : $_SERVER['REMOTE_ADDR'];
+    $remote_ip    = _shorturl_get_remote_ip();
 
     $url_data = _shorturl_urldata($long_url);
 
@@ -1371,6 +1371,23 @@ function shorturl_parse_url($url, $strict = false)
     }
 
     return $parsed;
+}
+
+function _shorturl_get_remote_ip()
+{
+    if ( !empty($_SERVER['HTTP_X_FORWARDED_FOR']) )
+    {
+        $ex = explode(',',$_SERVER['HTTP_X_FORWARDED_FOR']);
+        if ( count($ex) > 0 )
+        {
+            return trim($ex[0]);
+        }
+    }
+    if ( !empty($_SERVER['REMOTE_ADDR']) )
+    {
+        return $_SERVER['REMOTE_ADDR'];
+    }
+    return ip_address();
 }
 
 function _shorturl_get_url_to_shorten($form, &$form_state)
