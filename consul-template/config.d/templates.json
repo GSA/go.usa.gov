@@ -1,17 +1,17 @@
 template {
   source = "/consul-template/templates/cli-zz-php.ini.ctmpl"
-  destination = "/etc/php/7.0/cli/conf.d/zz-php.ini"
-  command = "/usr/sbin/service php7.0-fpm reload"
+  destination = "/etc/php/curr/cli/conf.d/zz-php.ini"
+  command = "/usr/sbin/service php-fpm reload"
 }
 
 template {
   source = "/consul-template/templates/fpm-zz-php.ini.ctmpl"
-  destination = "/etc/php/7.0/fpm/conf.d/zz-php.ini"
-  command = "/usr/sbin/service php7.0-fpm reload"
+  destination = "/etc/php/curr/fpm/conf.d/zz-php.ini"
+  command = "/usr/sbin/service php-fpm reload"
 }
 
 template {
   source = "/consul-template/templates/env.php.ctmpl"
   destination = "/etc/php/env.php"
-  command = "/usr/sbin/service php7.0-fpm reload"
+  command = "/usr/sbin/service php-fpm reload"
 }
