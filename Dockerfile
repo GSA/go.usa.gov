@@ -1,4 +1,4 @@
-FROM ctac/drupal-base:7.1
+FROM ctac/drupal-base:7
 
 # Inject Consul Template
 ENV CONSUL_TEMPLATE_VERSION 0.15.0
