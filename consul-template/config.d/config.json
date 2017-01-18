@@ -3,10 +3,10 @@
 # ENV VAULT_TOKEN
 # To process
 
-consul = "10.151.228.64:8500"
+consul = "consul.service.consul:8500"
 retry = "10s"
 log_level = "err"
 vault {
-  address = "http://10.151.228.64:8200"
-  renew = false
+  address = "http://vault.service.consul:8200"
+  renew_token = false
 }

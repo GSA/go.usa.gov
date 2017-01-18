@@ -1,7 +1,7 @@
 FROM ctac/drupal-base:7
 
 # Inject Consul Template
-ENV CONSUL_TEMPLATE_VERSION 0.15.0
+ENV CONSUL_TEMPLATE_VERSION 0.16.0
 
 COPY app/drupal/sites /var/www/html/sites
 COPY app/drupal/misc /var/www/html/misc
