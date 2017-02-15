@@ -127,6 +127,13 @@ function shorturl_init()
         variable_set('site_frontpage', 'shorturl');
     }
 
+    if (isset($_GET['destination'])) {
+      unset($_GET['destination']);
+    }
+    if (isset($_POST['destination'])) {
+      unset($_POST['destination']);
+    }
+
     /* hook init is used so we run this check after all modules are already loaded in memory
      * if drupal already knows of a handler for this url, we assume it is not a shorturl
      * this miiiiight leave us open to collisions, so maybe the token generator could check

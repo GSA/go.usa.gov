@@ -1,4 +1,4 @@
-FROM ctac/drupal-base:7
+FROM ctac/drupal-base:7.54-php7.1
 
 COPY app/drupal/sites /var/www/html/sites
 COPY app/drupal/misc  /var/www/html/misc

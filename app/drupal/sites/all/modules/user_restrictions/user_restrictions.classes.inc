@@ -84,7 +84,7 @@ class UserRestrictions {
         db_query_range($sql, 0, 1, $args + array(':status' => 0))->fetchField() &&
         !db_query_range($sql, 0, 1, $args + array(':status' => 1))->fetchField()
       );
-     
+
       $error = array(
         'field' => '',
         'message' => '',
@@ -199,7 +199,7 @@ class UserRestrictions {
         ),
       );
     }
-    
+
     return $rows;
   }
 
@@ -225,7 +225,7 @@ class UserRestrictions {
     if (!empty($this->urid)) {
       $primary_keys[] = 'urid';
     }
-    
-    return drupal_write_record('user_restrictions', clone $this, $primary_keys);
+    $that = clone $this;
+    return drupal_write_record('user_restrictions', $that, $primary_keys);
   }
 }
