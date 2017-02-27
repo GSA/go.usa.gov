@@ -1,0 +1,8 @@
+[mysqld]
+
+innodb_buffer_pool_size=12G
+max_allowed_packet=1G
+innodb_adaptive_hash_index=0
+wait_timeout=7200
+table_open_cache=800
+explicit_defaults_for_timestamp=1

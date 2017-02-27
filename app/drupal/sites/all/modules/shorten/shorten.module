@@ -196,9 +196,9 @@ function shorten_url($original = '', $service = '', $cooldown = 0 )
             return $original;
         }
         $url = url($shortened, array('absolute' => true));
-        if (drupal_substr($url, 0, 8) == 'https://') {
-            $url = str_replace('https://', 'http://', $url);
-        }
+        // if (drupal_substr($url, 0, 8) == 'https://') {
+        //     $url = str_replace('https://', 'http://', $url);
+        // }
     } else {
         $services = module_invoke_all('shorten_service');
         if (isset($services[$service])) {

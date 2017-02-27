@@ -12,3 +12,18 @@ services:
       env_file:
         - dev.env
         #- prod.env
+
+    # aws s3 ls --profile cmp-developer s3://app_go_iemyxvinzbc/backup/database/prod/
+    mysql:
+      image: mysql:5.7
+      user: root
+      #command: mysqld --skip-grant-tables
+      ports:
+        - "3307:3306"
+      environment:
+        - MYSQL_ALLOW_EMPTY_PASSWORD=1
+        - MYSQL_USER=root
+        - MYSQL_PASSWORD=
+      volumes:
+        - ./data/mysql:/var/lib/mysql:rw
+        - ./docker/mysql/rootfs/etc/mysql/conf.d/my-extras.cnf:/etc/mysql/conf.d/my-extras.cnf:rw
