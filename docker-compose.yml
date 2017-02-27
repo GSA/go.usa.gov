@@ -13,10 +13,11 @@ services:
         - dev.env
         #- prod.env
 
+    # aws s3 ls --profile cmp-developer s3://app_go_iemyxvinzbc/backup/database/prod/
     mysql:
       image: mysql:5.7
       user: root
-      command: mysqld --skip-grant-tables
+      #command: mysqld --skip-grant-tables
       ports:
         - "3307:3306"
       environment:
