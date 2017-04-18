@@ -79,7 +79,8 @@
   }
   .metricsdata .export-container form input[type=submit]
   {
-    color: #2B5781;
+    /* color: #2B5781; */
+    color: #2b5781;
     border: none;
     background: none;
     text-decoration: underline;
@@ -323,8 +324,8 @@
   table.hbar-graph caption
   {
     border-radius: .5em .5em 0 0;
-    background-color: #c41230;
-    color: white;
+    background-color: #02bfe7;
+    /* color: white; */
     font-size: 115%;
   }
   table.hbar-graph caption,
@@ -362,7 +363,9 @@
   }
   table.hbar-graph tbody tr .value
   {
-    background-color: #2b5781;
+    /* background-color: #2b5781; */
+    background-color: #02bfe7;
+
   }
   table.hbar-graph tbody tr:hover    .value,
   table.hbar-graph tbody tr:focus    .value,
@@ -422,7 +425,9 @@
   div.datepicker_bootstrap .years .year.selected,
   div.datepicker_bootstrap .years .year.selected:hover
   {
-    background-color: #2b5781;
+    /* background-color: #2b5781; */
+    background-color: #02bfe7;
+
   }
 
 #metricsForm{

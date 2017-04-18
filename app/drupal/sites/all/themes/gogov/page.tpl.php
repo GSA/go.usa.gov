@@ -115,6 +115,9 @@
           <?php $fmm = menu_tree('main-menu'); print drupal_render($fmm); ?>
         </div>
       </div>
+      <div class="poweredby">
+          <p><a href="https://www.usa.gov/explore">Brought to you by <img class="explore-logo" alt="USAgov" src="sites/all/themes/gogov/images/Logo_USAgov_Footer.png"></a></p>
+      </div>
       <?php print render($page['footer_area']); ?>
     </div>
   </div>
