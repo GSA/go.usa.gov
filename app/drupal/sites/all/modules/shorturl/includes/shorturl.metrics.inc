@@ -176,25 +176,28 @@ function shorturl_shorturl_clickthrough($click)
 function shorturl_metrics_is_bot($user_agent)
 {
     $bot_list = array(
-    'google' => array(
-         '/(Googlebot|AdsBot-Google|Mediapartners-Google)/i',
-    ),
-    'yahoo' => array(
-        '/Yahoo!( Slurp|-AdCrawler)/i',
-    ),
-    'bing' => array(
-        '/(BingPreview|msnbot|bingbot)/i',
-    ),
-    'ask' => array(
-         '/Ask Jeeves/i',
-    ),
-    'lycos' => array(
-         '/Lycos\/x.x/i',
-    ),
-    'generic' => array(
-         '/(spider|crawl(ing|er)?|bot[\W\b])/i',
-    ),
-  );
+        'archive' => array(
+            '/(Eat Delicious Poop|TerrorOfTinyTown|ArchiveTeam|URLTeam)/i',
+        ),
+        'google' => array(
+            '/(Googlebot|AdsBot-Google|Mediapartners-Google)/i',
+        ),
+        'yahoo' => array(
+            '/Yahoo!( Slurp|-AdCrawler)/i',
+        ),
+        'bing' => array(
+            '/(BingPreview|msnbot|bingbot)/i',
+        ),
+        'ask' => array(
+            '/Ask Jeeves/i',
+        ),
+        'lycos' => array(
+            '/Lycos\/x.x/i',
+        ),
+        'generic' => array(
+            '/(spider|crawl(ing|er)?|bot[\W\b])/i',
+        ),
+    );
     foreach ($bot_list as $bot => $bot_agents) {
         foreach ($bot_agents as $bot_agent) {
             if (empty($bot_agent)) {
