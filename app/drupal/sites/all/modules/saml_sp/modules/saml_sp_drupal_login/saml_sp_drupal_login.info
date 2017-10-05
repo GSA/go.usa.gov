@@ -1,0 +1,13 @@
+name = SAML Drupal Login
+description = Allow users to log in to Drupal using a third-party SAML Identity Provider.
+core = 7.x
+dependencies[] = saml_sp
+package = SAML
+configure = admin/config/people/saml_sp/drupal_login
+
+; Information added by Drupal.org packaging script on 2017-09-22
+version = "7.x-2.1"
+core = "7.x"
+project = "saml_sp"
+datestamp = "1506101047"
+

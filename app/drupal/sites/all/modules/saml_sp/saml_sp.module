@@ -1,0 +1,706 @@
+<?php
+/**
+ * @file
+ * SAML Service Provider
+ *
+ * Allow users to log in to Drupal via a third-party SAML Identity Provider.
+ * Users authenticate to the third-party SAML IDP (e.g. http://idp.example.com)
+ * and a series of redirects allows that authentication to be recognised in
+ * Drupal.
+ *
+ * Uses the OneLogin PHP-SAML toolkit: https://github.com/onelogin/php-saml
+ */
+
+// require PHP SAML 2.0 or greater
+define('PHP_SAML_LIBRARY_MIN_VERSION', '2.0.0');
+
+// Default name to identify this application to IDPs.
+define('DRUPAL_SAML_SP__APP_NAME_DEFAULT', 'drupal-saml-sp');
+
+// Expect a response from the IDP within 2 minutes.
+define('SAML_SP_REQUEST_CACHE_TIMEOUT', 120);
+
+/**
+ * Implements hook_theme().
+ */
+function saml_sp_theme() {
+  return array(
+    'saml_sp__idp_list' => array(
+      'render element' => 'idps',
+      'file' => 'saml_sp.theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function saml_sp_permission() {
+  return array(
+    'configure saml sp' => array(
+      'title' => t('Configure SAML SP'),
+      'description' => t('Configure the SAML Service Provider integration.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function saml_sp_menu() {
+  $items = array();
+
+  $items['admin/config/people/saml_sp'] = array(
+    'title' => 'SAML Service Providers',
+    'description' => 'Configure your SAML Service',
+    'page callback' => 'saml_sp__admin_overview',
+    'access arguments' => array('configure saml sp'),
+    'file' => 'saml_sp.admin.inc',
+  );
+  $items['admin/config/people/saml_sp/IDP'] = array(
+    'title' => 'Identiy Providers',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'access arguments' => array('configure saml sp'),
+    'weight' => -10,
+  );
+
+  $items['admin/config/people/saml_sp/setup'] = array(
+    'title' => 'Configure SP',
+    'description' => 'Configure this Service provider',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('saml_sp__admin_config'),
+    'type' => MENU_LOCAL_TASK,
+    'access arguments' => array('configure saml sp'),
+    'file' => 'saml_sp.admin.inc',
+  );
+
+  // Add a new IDP.
+  $items['admin/config/people/saml_sp/IDP/add'] = array(
+    'title' => 'Add SAML IDP',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('saml_sp__configure_idp_form'),
+    'access arguments' => array('configure saml sp'),
+    'file' => 'saml_sp.admin.inc',
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  // Configure an existing IDP.
+  $items['admin/config/people/saml_sp/IDP/%saml_sp_idp'] = array(
+    'title' => 'SAML IDP: @idp_name',
+    'title callback' => 'saml_sp__menu_title',
+    'title arguments' => array('SAML IDP: @idp_name', 5),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('saml_sp__configure_idp_form', 5),
+    'access arguments' => array('configure saml sp'),
+    'file' => 'saml_sp.admin.inc',
+  );
+  // Confirmation form to delete an IDP.
+  $items['admin/config/people/saml_sp/IDP/%saml_sp_idp/delete'] = array(
+    'title' => 'Delete SAML IDP: @idp_name',
+    'title callback' => 'saml_sp__menu_title',
+    'title arguments' => array('Delete SAML IDP: @idp_name', 5),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('saml_sp__delete_idp_form', 5),
+    'access arguments' => array('configure saml sp'),
+    'file' => 'saml_sp.admin.inc',
+  );
+  // Export the IDP configuration to code.
+  $items['admin/config/people/saml_sp/IDP/%saml_sp_idp/export'] = array(
+    'title' => 'Export SAML IDP: @idp_name',
+    'title callback' => 'saml_sp__menu_title',
+    'title arguments' => array('Export SAML IDP: @idp_name', 5),
+    'page callback' => 'saml_sp__export_idp',
+    'page arguments' => array(5),
+    'access arguments' => array('configure saml sp'),
+    'file' => 'saml_sp.admin.inc',
+  );
+  // metadata specific to an IDP
+  $items['saml/metadata.xml'] = array(
+    'page callback' => 'saml_sp__get_metadata',
+    'page arguments' => array(NULL, TRUE),
+    'access callback' => TRUE,
+  );
+
+
+
+  // SAML endpoint for all requests.
+  // Some IDPs ignore the URL provided in the authentication request
+  // (the AssertionConsumerServiceURL attribute) and hard-code a return URL in
+  // their configuration, therefore all modules using SAML SP will have the
+  // same consumer endpoint: /saml/consume.
+
+  // A unique ID is generated for each outbound request, and responses are
+  // expected to reference this ID in the `inresponseto` attribute of the
+  // `<samlp:response` XML node.
+
+  $items['saml/consume'] = array(
+    'page callback' => 'saml_sp__endpoint',
+    // This endpoint should not be under access control.
+    'access callback' => TRUE,
+    'file' => 'saml_sp.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['saml/logout'] = array(
+    'page callback' => 'saml_sp__logout',
+    // This endpoint should not be under access control.
+    'access callback' => TRUE,
+    'file' => 'saml_sp.pages.inc',
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Title callback for SAML SP menu items.
+ */
+function saml_sp__menu_title($title, $idp) {
+  return t($title, array('@idp_name' => $idp->name));
+}
+
+/**
+ * generate a url for the idp metadata
+ */
+function saml_sp__metadata_url() {
+  return url('saml/metadata.xml', array('absolute' => TRUE));
+}
+
+
+/******************************************************************************
+ * CRUD handlers.
+ *****************************************************************************/
+
+
+/**
+ * Load a single IDP.
+ * Also a menu argument loader.
+ *
+ * @param String $idp_machine_name
+ *
+ * @return Object
+ */
+function saml_sp_idp_load($idp_machine_name) {
+  $all_idps = saml_sp__load_all_idps();
+  return (isset($all_idps[$idp_machine_name]) ? $all_idps[$idp_machine_name] : FALSE);
+}
+
+/**
+ * Save an IDP configuration.
+ *
+ * @param Object $idp
+ * A populated IDP object, with the keys:
+ * - name
+ * - machine_name
+ * - app_name
+ * - nameid_field
+ * - login_url
+ * - x509_cert
+ *
+ * @return Int
+ * One of:
+ * - SAVED_NEW
+ * - SAVED_UPDATED
+ */
+function saml_sp_idp_save($idp) {
+  // Prevent PHP notices by ensure 'export_type' is populated.
+  if (empty($idp->export_type)) {
+    $idp->export_type = NULL;
+  }
+
+  // Handle changes of machine name (if which case $idp->orig_machine_name
+  // should be populated).
+  if (!empty($idp->orig_machine_name)) {
+    saml_sp_idp_delete($idp->orig_machine_name);
+    $idp->export_type = NULL;
+  }
+
+  // Delegate to the CTools CRUD handler.
+  $result = ctools_export_crud_save('saml_sp_idps', $idp);
+  return (isset($idp->orig_machine_name) && $result == SAVED_NEW) ? SAVED_UPDATED : $result;
+}
+
+/**
+ * Delete an IDP.
+ *
+ * @param String $idp_machine_name
+ */
+function saml_sp_idp_delete($idp_machine_name) {
+  // No success feedback is provided.
+  ctools_export_crud_delete('saml_sp_idps', $idp_machine_name);
+}
+
+/**
+ * Load all the registered IDPs.
+ *
+ * @return Array
+ * An array of IDP objects, keyed by the machine name.
+ */
+function saml_sp__load_all_idps() {
+  // Use CTools export API to fetch all presets.
+  ctools_include('export');
+  $result = ctools_export_crud_load_all('saml_sp_idps');
+  return $result;
+}
+
+
+
+/******************************************************************************
+ * API library integration.
+ *****************************************************************************/
+/**
+ * Implements hook_libraries_info().
+ */
+function saml_sp_libraries_info() {
+
+  $libraries['php-saml'] = array(
+    'name' => 'Simple SAML toolkit for PHP',
+    'vendor url' => 'https://github.com/onelogin/php-saml',
+    'download url' => 'https://github.com/onelogin/php-saml/archive/master.zip',
+    'version arguments' => array(
+      'file'    => 'CHANGELOG',
+      'pattern' => '/v\.([0-9a-zA-Z\.-]+)/',
+    ),
+    'files' => array(
+      'php' => array(
+        'extlib/xmlseclibs/xmlseclibs.php',
+        'lib/Saml2/Auth.php',
+        'lib/Saml2/AuthnRequest.php',
+        'lib/Saml2/Constants.php',
+        'lib/Saml2/Error.php',
+        'lib/Saml2/LogoutRequest.php',
+        'lib/Saml2/LogoutResponse.php',
+        'lib/Saml2/Metadata.php',
+        'lib/Saml2/Response.php',
+        'lib/Saml2/Settings.php',
+        'lib/Saml2/Utils.php',
+      ),
+    ),
+  );
+
+  return $libraries;
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function saml_sp_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    $t = get_t();
+
+    // php-saml library
+    $library = libraries_detect('php-saml');
+    $error_type = isset($library['error']) ? drupal_ucfirst($library['error']) : '';
+    $error_message = isset($library['error message']) ? $library['error message'] : '';
+
+    if (empty($library['installed'])) {
+      $requirements['php_saml_library'] = array(
+        'title' => $t('PHP SAML library'),
+        'value' => $t('@e: At least @a', array('@e' => $error_type, '@a' => PHP_SAML_LIBRARY_MIN_VERSION)),
+        'severity' => REQUIREMENT_ERROR,
+        'description' => $t('!error You need to download the !library, extract the archive and place the !machine_name directory in the %path directory on your server.', array('!error' => $error_message, '!library' => l($t('PHP SAML library'), $library['download url']), '%path' => 'sites/all/libraries', '!machine_name' => $library['machine name'])),
+      );
+    }
+    elseif (version_compare($library['version'], PHP_SAML_LIBRARY_MIN_VERSION, '>=')) {
+      $requirements['php_saml_library'] = array(
+        'title' => $t('PHP SAML library'),
+        'severity' => REQUIREMENT_OK,
+        'value' => $library['version'],
+      );
+    }
+    else {
+      $requirements['php_saml_library'] = array(
+        'title' => $t('PHP SAML library'),
+        'value' => $t('At least @a', array('@a' => PHP_SAML_LIBRARY_MIN_VERSION)),
+        'severity' => REQUIREMENT_ERROR,
+        'description' => $t('You need to download a later version of the !library and replace the old version located in the %path directory on your server.', array('!library' => l($t('PHP SAML library'), $library['download url']), '%path' => $library['library path'])),
+      );
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Get the SAML settings for an IdP.
+ *
+ * @param Object $idp
+ * An IDP object, such as that provided by saml_sp_idp_load($machine_name).
+ *
+ * @return OneLogin_Saml_Settings
+ * IdP Settings data.
+ */
+function saml_sp__get_settings($idp) {
+  // Require all the relevant libraries.
+  $library = _saml_sp__prepare();
+  if (!$library['loaded']) {
+    drupal_set_message(t('PHP-SAML library could not be loaded.'));
+    return array();
+  }
+
+
+  //$settings = new OneLogin_Saml_Settings();
+  $settings = array();
+
+  // The consumer endpoint will always be /saml/consume.
+  $endpoint_url = url("saml/consume", array('absolute' => TRUE));
+
+  $settings['idp']['entityId'] = $idp->machine_name;
+
+  // URL to login of the IdP server.
+  $settings['idp']['singleSignOnService']['url'] = $idp->login_url;
+
+  // URL to logout of the IdP server.
+  $settings['idp']['singleLogoutService'] = array(
+    'url' => $idp->logout_url,
+    'binding' => 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect',
+  );
+
+  // The IdP's public x.509 certificate.
+  if (strpos($idp->x509_cert, "\n")) {
+    // there are possibly multiple x.509 certs, use the first one
+    $idp_certs = explode("\n", $idp->x509_cert);
+    $idp->x509_cert = $idp_certs[0];
+  }
+  $settings['idp']['x509cert'] = $idp->x509_cert;
+
+  // The authentication method we want to use with the IdP
+  if ($idp->authn_context_class_ref) {
+    // we don't always want to specify an Authn Context
+    $settings['idp']['AuthnContextClassRef'] = $idp->authn_context_class_ref;
+  }
+
+  // Name to identify IdP
+  $settings['idp']['entityId'] = $idp->entity_id;
+
+
+  $settings['strict'] = (bool) variable_get('saml_sp__strict', FALSE);
+
+  // Name to identify this application, if none is given use the absolute URL
+  // instead
+  $settings['sp']['entityId'] = $idp->app_name ? $idp->app_name : url('user', array('absolute' => TRUE));
+
+  // Drupal URL to consume the response from the IdP.
+  $settings['sp']['assertionConsumerService'] = array(
+    'url' => $endpoint_url,
+    'binding' => 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
+  );
+
+  // Tells the IdP to return the email address of the current user
+  $settings['sp']['NameIDFormat'] = OneLogin_Saml2_Constants::NAMEID_EMAIL_ADDRESS;
+
+  // add the contact information for the SP
+  $contact = variable_get('saml_sp__contact', array());
+  $settings['contactPerson'] = array (
+    'technical' => array (
+        'givenName' => @$contact['technical']['name'],
+        'emailAddress' => @$contact['technical']['email'],
+    ),
+    'support' => array (
+        'givenName' => @$contact['support']['name'],
+        'emailAddress' => @$contact['support']['email'],
+    ),
+  );
+
+  // add the organization information
+  $organization = variable_get('saml_sp__organization', array());
+  $settings['organization'] = array (
+    'en-US' => array(
+      'name' => @$organization['name'],
+      'displayname' => @$organization['display_name'],
+      'url' => @$organization['url'],
+    ),
+  );
+
+  // add the security settings
+  $security = variable_get('saml_sp__security', array());
+  $settings['security'] = array (
+    // signatures and encryptions offered
+    'nameIdEncrypted'       => (bool) $security['nameIdEncrypted'],
+    'authnRequestsSigned'   => (bool) $security['authnRequestsSigned'],
+    'logoutRequestSigned'   => (bool) $security['logoutRequestSigned'],
+    'logoutResponseSigned'  => (bool) $security['logoutResponseSigned'],
+    // Sign the Metadata
+    'signMetadata'          => (bool) $security['signMetaData'],
+    // signatures and encryptions required
+    'wantMessagesSigned'    => (bool) $security['wantMessagesSigned'],
+    'wantAssertionsSigned'  => (bool) $security['wantAssertionsSigned'],
+    'wantNameIdEncrypted'   => (bool) $security['wantNameIdEncrypted'],
+  );
+
+  $cert_location = variable_get('saml_sp__cert_location', '');
+  if ($cert_location && file_exists($cert_location)) {
+    $settings['sp']['x509cert'] = file_get_contents($cert_location);
+  }
+
+  // Invoke hook_saml_sp_settings_alter().
+  drupal_alter('saml_sp_settings', $settings);
+
+  // we are adding in the private key after the alter function because we don't
+  // want to risk the private key getting out and in the hands of a rogue module
+  $key_location = variable_get('saml_sp__key_location', '');
+  if ($key_location && file_exists($key_location)) {
+    $settings['sp']['privateKey'] = file_get_contents($key_location);
+  }
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', '$settings => <pre>@settings</pre>', array('@settings' => print_r($settings, TRUE)), WATCHDOG_DEBUG);
+  }
+  return $settings;
+}
+
+
+
+/**
+ * load the settings and get the metadata
+ */
+function saml_sp__get_metadata($idp, $output_page = FALSE) {
+  if (empty($idp)) {
+    // no $idp was given, we will try to see if there is a default one set
+    $idp_selection = variable_get('saml_sp_drupal_login__idp', '');
+    $idp = saml_sp_idp_load($idp_selection);
+    if (empty($idp)) {
+      // there is also no default $idp set
+      if ($output_page) {
+        // so return a page not found
+        drupal_not_found();
+        return;
+      }
+      else {
+        throw new Exception('No Default IdP defined.');
+        // return FALSE
+        return FALSE;
+      }
+    }
+  }
+
+  $settings = saml_sp__get_settings($idp);
+  if (empty($settings)) {
+    return array(t('Settings could not be loaded and metadata couldn\'t be generated.'));
+  }
+  $auth = new OneLogin_Saml2_Auth($settings);
+  $settings = $auth->getSettings();
+  $metadata = $settings->getSPMetadata();
+  $errors = $settings->validateMetadata($metadata);
+  if (empty($errors)) {
+    if ($output_page) {
+      drupal_add_http_header('Content-Type', 'text/xml');
+      print $metadata;
+    }
+    else {
+      return $metadata;
+    }
+  }
+  else {
+    return array($metadata, $errors);
+  }
+}
+
+/******************************************************************************
+ * Start and finish SAML authentication process.
+ *****************************************************************************/
+
+
+/**
+ * Start a SAML authentication request.
+ *
+ * @param Object $idp
+ * @param String $callback
+ * A function to call with the results of the SAML authentication process.
+ */
+function saml_sp_start($idp, $callback) {
+  global $base_url, $language;
+  if (isset($_GET['returnTo'])) {
+    // If a returnTo parameter is present, then use that
+    $return_to = $_GET['returnTo'];
+  }
+  else {
+    // By default the user is returned to the front page in the same language
+    $return_to = $base_url . '/' . $language->prefix;
+  }
+
+  $settings = saml_sp__get_settings($idp);
+  $auth = new saml_sp_Auth($settings);
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', '$auth => <pre>@auth</pre>', array('@auth' => print_r($auth, TRUE)), WATCHDOG_DEBUG);
+  }
+  $auth->setAuthCallback($callback);
+  return $auth->login($return_to);
+}
+
+/**
+ * Track an outbound request.
+ *
+ * @param String $id
+ * The unique ID of an outbound request.
+ * $param Object $idp
+ * IDP data.
+ * @param String $callback
+ * The function to invoke on completion of a SAML authentication request.
+ */
+function saml_sp__track_request($id, $idp, $callback) {
+  $data = array(
+    'id' => $id,
+    'idp' => $idp->machine_name,
+    'callback' => $callback,
+  );
+
+  $expire = REQUEST_TIME + SAML_SP_REQUEST_CACHE_TIMEOUT;
+  cache_set($id, $data, 'saml_sp_request_tracking_cache', $expire);
+}
+
+/**
+ * Get the IDP and callback from a tracked request.
+ *
+ *
+ * @param String $id
+ * The unique ID of an outbound request.
+ *
+ * @return Array|FALSE
+ * An array of tracked data, giving the keys:
+ * - id       The original outbound ID.
+ * - idp      The machine name of the IDP.
+ * - callback The function to invoke on authentication.
+ */
+function saml_sp__get_tracked_request($id) {
+  if ($cache = cache_get($id, 'saml_sp_request_tracking_cache')) {
+    return $cache->data;
+  }
+  return FALSE;
+}
+
+/******************************************************************************
+ * Internal helper functions.
+ *****************************************************************************/
+
+
+/**
+ * Get a default IDP object.
+ */
+function _saml_sp__default_idp() {
+  return (object) array(
+    'name' => '',
+    'machine_name' => '',
+    'nameid_field' => 'mail',
+    // If the app-name is NULL, the global app-name will be used instead.
+    'app_name' => NULL,
+    'login_url' => '',
+    'logout_url' => '',
+    'x509_cert' => '',
+    'entity_id' => '',
+    'authn_context_class_ref' => 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+  );
+}
+
+/**
+ * Load the required OneLogin SAML-PHP toolkit files.
+ *
+ * this function is a holdover from when the module didn't use libraries
+ */
+function _saml_sp__prepare() {
+  return libraries_load('php-saml');
+}
+
+/**
+ * Extract the unique ID of an outbound request.
+ *
+ * @param String $encoded_url
+ * The response of OneLogin_Saml_AuthRequest::getRedirectUrl(), which is
+ * multiple-encoded.
+ *
+ * @return String|FALSE
+ * The unique ID of the outbound request, if it can be decoded.
+ * This will be OneLogin_Saml_AuthRequest::ID_PREFIX, followed by a sha1 hash.
+ */
+function _saml_sp__extract_outbound_id($encoded_url) {
+  $string = $encoded_url;
+  $string = @urldecode($string);
+  $string = @substr($string, 0, strpos($string, '&'));
+  $string = @base64_decode($string);
+  $string = @gzinflate($string);
+
+  // This regex is based on the constructor code  provided in
+  // OneLogin_Saml2_AuthnRequest.
+  $regex = '/^<samlp:AuthnRequest
+    xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
+    xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"
+    ID="(ONELOGIN_[0-9a-f]{40})"/m';
+
+  $result = FALSE;
+  if (preg_match($regex, $string, $matches)) {
+    $result = $matches[1];
+  }
+
+  return $result;
+}
+
+/**
+ * Extract the unique ID in an inbound request.
+ *
+ * @param String $assertion
+ * UUEncoded SAML assertion from the IdP (i.e. the POST request).
+ *
+ * @return String|FALSE
+ * The unique ID of the inbound request, if it can be decoded.
+ * This will be OneLogin_Saml_AuthRequest::ID_PREFIX, followed by a sha1 hash.
+ */
+function _saml_sp__extract_inbound_id($assertion) {
+  // Decode the request.
+  $xml = base64_decode($assertion);
+
+  // Load the XML.
+  $document = new DOMDocument();
+  if ($document->loadXML($xml)) {
+    try {
+      $id = @$document->firstChild->attributes->getNamedItem('InResponseTo')->value;
+      watchdog('saml_sp', 'SAML login attempt with inbound ID: %id<br/>XML => <br/><pre>@xml</pre>', array('%id' => $id, '@xml' => $xml));
+      return $id;
+    }
+    catch (Exception $e) {
+      watchdog('saml_sp', 'Could not extract inbound ID. %exception', array('%exception' => $e));
+      return FALSE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * a list of supported AuthnContexts
+ */
+function saml_sp_get_authn_contexts() {
+  return array(
+    'urn:oasis:names:tc:SAML:2.0:ac:classes:Password' => array('id' => 'P', 'label' => t('User Name and Password')),
+    'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport' => array('id' => 'PPT', 'label' =>t('Password Protected Transport')),
+    'urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient' => array('id' => 'TLS', 'label' => t('Transport Layer Security (TLS) Client')),
+    'urn:oasis:names:tc:SAML:2.0:ac:classes:X509' => array('id' => 'x509', 'label' => t('X.509 Certificate')),
+    'urn:federation:authentication:windows' => array('id' => 'IWA', 'label' => t('Integrated Windows Authentication')),
+    'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos' => array('id' => 'K', 'label' => t('Kerberos')),
+  );
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+ /**
+  * comment out the changes to the user form which is causing problems... this
+  * will be uncommented when a better solution conceived of.
+function saml_sp_form_alter(&$form, &$form_state, $form_id) {
+   switch ($form_id) {
+    case 'user_profile_form' :
+      // Disable email field because it should not be changed when using SSO.
+      // Users who have access to configure the module can do it.
+      if (!user_access('configure saml sp')) {
+        $form['account']['mail']['#disabled'] = TRUE;
+      }
+      $form['account']['mail']['#description'] = t('Email address cannot be changed here, because the information comes from the SSO server. You need to change it there instead. After it has been changed, you need to logout and login to this service to see the updated address.');
+      // Disable all password fields because they need to be changed on the IdP
+      // server
+      // are we sure that we want to remoev all password fields? some
+      // configurations they will still want to allow for separate Drupal logins
+      //$validate_unset = array_search('user_validate_current_pass', $form['#validate']);
+      //unset($form['#validate'][$validate_unset], $form['account']['pass'], $form['account']['current_pass']);
+    break;
+   }
+}
+*/

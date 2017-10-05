@@ -1,0 +1,19 @@
+name = SAML Service Provider
+description = API module to validate SAML IDP (Identity Provider) credentials.
+core = 7.x
+configure = admin/config/people/saml
+php = 5.3
+package = SAML
+
+dependencies[] = ctools
+dependencies[] = libraries
+
+files[] = includes/saml_sp.Auth.inc
+files[] = includes/saml_sp.AuthnRequest.inc
+
+; Information added by Drupal.org packaging script on 2017-09-22
+version = "7.x-2.1"
+core = "7.x"
+project = "saml_sp"
+datestamp = "1506101047"
+

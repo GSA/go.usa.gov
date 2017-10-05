@@ -1,0 +1,208 @@
+<?php
+
+/**
+ * @file
+ * Hook_requirements for the SAML Service Provider module.
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function saml_sp_schema() {
+  $schema = array();
+
+  // Cache all outbound SAML SP requests.
+  $schema['saml_sp_request_tracking_cache'] = drupal_get_schema_unprocessed('system', 'cache');
+
+
+  // Store the IDP data.
+  $schema['saml_sp_idps'] = array(
+    'description' => 'IDPs registered with SAML Service Provider.',
+
+    // Enable CTools exportables based on this table.
+    'export' => array(
+      // SAML IDP machine name key.
+      'key' => 'machine_name',
+      // In the export, entries will be identified as $idp
+      'export' => 'idp',
+      // Description of key.
+      'key name' => 'IDP machine name',
+      // Variable name to use in exported code.
+      'identifier' => 'saml_idp',
+
+      // // Use the environment load callback directly.
+      // 'load callback' => 'apachesolr_environment_load',
+      // // Thin wrapper for the environment save callback.
+      // 'save callback' => 'apachesolr_ctools_environment_save',
+      // // Thin wrapper for the environment delete callback.
+      // 'delete callback' => 'apachesolr_ctools_environment_delete',
+      // // Includes the environment variables in 'conf' as well as the fields in this table.
+      // 'export callback' => 'apachesolr_ctools_environment_export',
+
+      // Use the same hook as the API name below.
+      'default hook' => 'saml_sp_default_idps',
+      // CTools API implementation.
+      'api' => array(
+        'owner' => 'saml_sp',
+        // Base name for API files: foo.saml_sp_idps.inc
+        'api' => 'saml_sp_idps',
+        'minimum_version' => 1,
+        'current_version' => 1,
+      ),
+    ),
+
+    'fields' => array(
+      'machine_name' => array(
+        'description' => 'Unique identifier for the environment',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'description' => 'Human-readable name for the SAML IDP',
+        'type' => 'varchar',
+        'length' => 30,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'app_name' => array(
+        'description' => 'Human-readable name to provide to the IDP to identify the application',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'entity_id' => array(
+        'description' => 'The entityID of the Identity Provider, possibly a URL',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+      ),
+      'nameid_field' => array(
+        'description' => 'Name of the fields where NameID is stored',
+        'type' => 'varchar',
+        'length' => 30,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'login_url' => array(
+        'description' => 'Full url to connect to the SAML login endpoint',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'logout_url' => array(
+        'description' => 'Full url to connect to the SAML logout endpoint',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'x509_cert' => array(
+        'description' => 'The x.509 public certificate of the IDP',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'authn_context_class_ref' => array(
+        'description' => 'Preferred authentication method.',
+        'type' => 'varchar',
+        'length' => '100',
+        'not null' => TRUE,
+        'default' => 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+      ),
+    ),
+    'primary key' => array('machine_name'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Cleans up variables.
+ */
+function saml_sp_uninstall() {
+  variable_del('saml_sp_drupal_login__idp');
+  variable_del('saml_sp__cert_location');
+  variable_del('saml_sp__key_location');
+  variable_del('saml_sp__security');
+  variable_del('saml_sp__strict');
+  variable_del('saml_sp__organization');
+  variable_del('saml_sp__contact');
+}
+
+// /**
+//  * Implements hook_requirements().
+//  */
+// function samp_sp_requirements($phase) {
+//
+// }
+
+/**
+ * Add field for NameID field to database
+ */
+function saml_sp_update_7000(&$sandbox) {
+  db_add_field('saml_sp_idps', 'nameid_field', array(
+    'description' => 'Name of the fields where NameID is stored.',
+    'type' => 'varchar',
+    'length' => 30,
+    'not null' => TRUE,
+    'default' => '',
+    ));
+}
+
+/**
+ * Change x509 certificate column type from varchar to text
+ */
+function saml_sp_update_7001(&$sandbox) {
+  db_change_field('saml_sp_idps', 'x509_cert', 'x509_cert', array('type' => 'text', 'not null' => TRUE));
+}
+
+/**
+ * Add the entity_id field to the saml_sp_idps table.
+ */
+function saml_sp_update_7202(&$sandbox) {
+  db_add_field('saml_sp_idps', 'entity_id', array(
+    'description' => 'The entityID of the Identity Provider, possibly a URL',
+    'type' => 'varchar',
+    'length' => '255',
+    'not null' => FALSE,
+  ));
+}
+
+/**
+ * Increase the size of the saml_sp_idps app_name field to 255.
+ */
+function saml_sp_update_7203(&$sandbox) {
+  db_change_field('saml_sp_idps', 'app_name', 'app_name', array(
+    'description' => 'Human-readable name to provide to the IDP to identify the application',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => ''
+  ));
+}
+
+/**
+ * Add the authn_context_class_ref field to the saml_sp_idps table.
+ */
+function saml_sp_update_7204(&$sandbox) {
+  db_add_field('saml_sp_idps', 'authn_context_class_ref', array(
+    'description' => 'Preferred authentication method.',
+    'type' => 'varchar',
+    'length' => '100',
+    'not null' => TRUE,
+    'default' => 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+  ));
+}
+
+/**
+ * move the cert and key locations out of the security variables and into their
+ * own variables so they can be excluded from features
+ */
+function saml_sp_update_7205() {
+  $security = variable_get('saml_sp__security', array());
+  variable_set('saml_sp__key_location', $security['saml_sp__key_location']);
+  variable_set('saml_sp__cert_location', $security['saml_sp__cert_location']);
+}
