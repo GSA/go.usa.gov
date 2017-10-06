@@ -297,16 +297,44 @@ function go_user_presave(&$edit, $account, $category)
         $roles_added   = array_diff($new_roles, $old_roles);
         $roles_removed = array_diff($old_roles, $new_roles);
         foreach ($roles_added as $role_id) {
-          watchdog('Role Change','Added role "'.$roles[$role_id].'" rid:'.
-            $role_id.' to user "'.$account->name.'" uid:'.$account->uid.
-            ' by user "'.$user->name.'" uid:'.$user->uid);
+          watchdog('role','Added role "%role" rid:%rid to user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+                '%role' => $roles[$role_id],
+                '%rid'  => $role_id,
+                '%acctname' => $account->name,
+                '%acctuid'  => $account->uid,
+                '%name' => $user->name,
+                '%uid'  => $user->uid
+            ],WATCHDOG_WARNING);
         }
         foreach ($roles_removed as $role_id) {
-          watchdog('Role Change','Removed role "'.$roles[$role_id].'" rid:'.
-            $role_id.' from user "'.$account->name.'" uid:'.$account->uid.
-            ' by user "'.$user->name.'" uid:'.$user->uid);
+          watchdog('role','Removed role "%role" rid:%rid from user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+                '%role' => $roles[$role_id],
+                '%rid'  => $role_id,
+                '%acctname' => $account->name,
+                '%acctuid'  => $account->uid,
+                '%name' => $user->name,
+                '%uid'  => $user->uid
+            ],WATCHDOG_WARNING);
         }
     }
+}
+function go_user_insert(&$edit, $account, $category) {
+    global $user;
+    watchdog('user','Added user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+        '%acctname'=>$account->name,
+        '%acctuid'=>$account->uid,
+        '%name'=>$user->name,
+        '%uid'=>$user->uid
+    ],WATCHDOG_WARNING);
+}
+function go_user_delete($account) {
+    global $user;
+    watchdog('user','Deleted user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+        '%acctname'=>$account->name,
+        '%acctuid'=>$account->uid,
+        '%name'=>$user->name,
+        '%uid'=>$user->uid
+    ],WATCHDOG_WARNING);
 }
 /** Implementation of hook_user */
 function go_user_view($account)
