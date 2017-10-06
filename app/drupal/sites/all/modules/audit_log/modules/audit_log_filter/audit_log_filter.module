@@ -1,0 +1,87 @@
+<?php
+/**
+ * @file
+ * Hook implemenations for the Audit database logging module.
+ */
+
+/**
+ * Implements hook_audit_log_it().
+ */
+function audit_log_filter_audit_log_it(Auditlog $log, array $context, $account) {
+  if (count(array_intersect($log->role_ids, variable_get('audit_log_filter_exclude_roles', array())))) {
+    return AUDIT_LOG_DO_NOT_LOG;
+  }
+  if (in_array($log->entity_type, variable_get('audit_log_exclude_entity_types', array()))) {
+    return AUDIT_LOG_DO_NOT_LOG;
+  }
+  if (in_array($log->entity_type . ':' . $log->bundle, variable_get('audit_log_exclude_bundles', array()))) {
+    return AUDIT_LOG_DO_NOT_LOG;
+  }
+  if (drupal_is_cli()) {
+    if (variable_get('audit_log_exclude_cli', FALSE)) {
+      return AUDIT_LOG_DO_NOT_LOG;
+    }
+    if (function_exists('drush_main') && variable_get('audit_log_exclude_drush', FALSE)) {
+      return AUDIT_LOG_DO_NOT_LOG;
+    }
+  }
+  return AUDIT_LOG_DO_LOG;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function audit_log_filter_permission() {
+  return array(
+    'audit_log_filter_admin' => array(
+      'title' => t('Administer audit log filter'),
+      'description' => t('Perform administration tasks for audit log filter.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function audit_log_filter_menu() {
+  $items = array();
+
+  $items['admin/config/system/audit-log'] = array(
+    'title' => 'Audit log settings',
+    'description' => 'Audit log settings',
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('audit_log_filter_admin'),
+    'type' => MENU_NORMAL_ITEM,
+    'file path' => drupal_get_path('module', 'system'),
+    'file' => 'system.admin.inc',
+  );
+
+  $items['admin/config/system/audit-log/filter-by-role'] = array(
+    'title' => 'Filter logging by role',
+    'description' => 'Filter logging by role',
+    'access arguments' => array('audit_log_filter_admin'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_log_filter_by_role_form'),
+    'file' => 'audit_log_filter.admin.inc',
+  );
+
+  $items['admin/config/system/audit-log/filter-by-entity'] = array(
+    'title' => 'Filter logging by entity',
+    'description' => 'Filter logging by entity types and bundles',
+    'access arguments' => array('audit_log_filter_admin'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_log_filter_by_entity_form'),
+    'file' => 'audit_log_filter.admin.inc',
+  );
+
+  $items['admin/config/system/audit-log/filter-by-cli'] = array(
+    'title' => 'Filter logging by environment',
+    'description' => 'Filter logging by environment (drush, cli, ...).',
+    'access arguments' => array('audit_log_filter_admin'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_log_filter_by_cli_form'),
+    'file' => 'audit_log_filter.admin.inc',
+  );
+
+  return $items;
+}

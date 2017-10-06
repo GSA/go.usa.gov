@@ -1,0 +1,105 @@
+<?php
+/**
+ * @file
+ * Hook implemenations for the Audit log module.
+ */
+
+define('AUDIT_LOG_DO_LOG', 'do log');
+define('AUDIT_LOG_DO_NOT_LOG', 'do not log');
+
+/**
+ * Log an audit log.
+ *
+ * @param mixed $entity
+ *   The entity on which the action is performed.
+ * @param string $entity_type
+ *   The entity type of the entity on which the action is performed.
+ * @param string $action
+ *   The action that was performed ('view', 'insert', 'update' or 'delete).
+ * @param object $account
+ *   The user that performed the action.
+ * @param string $url
+ *   The url on which the action was performed.
+ * @param int $timestamp
+ *   The timestamp when the action was performed.
+ *
+ * @see hook_audit_log_alter()
+ * @see hook_audit_log()
+ * @see AuditLog::log()
+ * @see hook_audit_log_insert()
+ */
+function audit_log($entity, $entity_type, $action = 'view', $account = NULL, $url = NULL, $timestamp = REQUEST_TIME) {
+  list($id, , $bundle) = entity_extract_ids($entity_type, $entity);
+  if (!$account) {
+    global $user;
+    $account = $user;
+  }
+  if (!$url) {
+    $url = request_path();
+  }
+  $values = array(
+    'entity_id' => $id,
+    'entity_type' => $entity_type,
+    'entity_label' => entity_label($entity_type, $entity),
+    'bundle' => $bundle,
+    'uid' => $account ? $account->uid : NULL,
+    'url' => $url,
+    'timestamp' => $timestamp,
+    'audit_action' => $action,
+  );
+
+  $log = new Auditlog(array_filter($values));
+  $context = array(
+    'entity' => $entity,
+    'entity_type' => $entity_type,
+    'action' => $action,
+    'account' => $account,
+    'url' => $url,
+    'timestamp' => $timestamp,
+  );
+
+  // Does this need to be logged.
+  $log_it = module_invoke_all('audit_log_it', $log, $context, $account);
+  if (in_array(AUDIT_LOG_DO_NOT_LOG, $log_it, TRUE)) {
+    // Inform other modules it has not been logged.
+    module_invoke_all('audit_log_skipped', $log);
+    return;
+  }
+
+  // Allow other modules to alter the log object.
+  drupal_alter('audit_log', $log, $context);
+
+  // Log the object.
+  $log->log();
+
+  // Inform other modules it has been logged.
+  module_invoke_all('audit_log_insert', $log);
+}
+
+/**
+ * Implements hook_entity_view().
+ */
+function audit_log_entity_view($entity, $entity_type) {
+  audit_log($entity, $entity_type);
+}
+
+/**
+ * Implements hook_entity_insert().
+ */
+function audit_log_entity_insert($entity, $entity_type) {
+  audit_log($entity, $entity_type, 'insert');
+}
+
+/**
+ * Implements hook_entity_update().
+ */
+function audit_log_entity_update($entity, $entity_type) {
+  audit_log($entity, $entity_type, 'update');
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function audit_log_entity_delete($entity, $entity_type) {
+  audit_log($entity, $entity_type, 'delete');
+}

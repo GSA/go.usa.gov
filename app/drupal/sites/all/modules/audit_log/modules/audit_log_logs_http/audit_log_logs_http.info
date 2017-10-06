@@ -1,0 +1,14 @@
+name = Audit logging using logs http module
+description = Audit logging using logs http module.
+package = Audit log
+core = 7.x
+
+dependencies[] = audit_log
+dependencies[] = logs_http
+
+; Information added by Drupal.org packaging script on 2015-08-18
+version = "7.x-1.2"
+core = "7.x"
+project = "audit_log"
+datestamp = "1439909305"
+

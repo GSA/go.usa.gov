@@ -285,6 +285,13 @@ function reset_key_form_submit($form, &$form_state)
     $_REQUEST['destination'] = 'user/'.$_SESSION['new_key']['uid'];
     unset($_SESSION['new_key']);
 }
+function go_audit_log(Auditlog $log) {
+    $roles = user_roles(TRUE);
+    foreach ( $log->role_ids as $i=>$rid  ) {
+        $log->role_ids[$i] = $rid.':'.$roles[$rid];
+    }
+    watchdog('audit',print_r($log,1),null,WATCHDOG_WARNING);
+}
 function go_user_presave(&$edit, $account, $category)
 {
     global $user;
@@ -297,7 +304,7 @@ function go_user_presave(&$edit, $account, $category)
         $roles_added   = array_diff($new_roles, $old_roles);
         $roles_removed = array_diff($old_roles, $new_roles);
         foreach ($roles_added as $role_id) {
-          watchdog('role','Added role "%role" rid:%rid to user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+          watchdog('audit','Added role "%role" rid:%rid to user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
                 '%role' => $roles[$role_id],
                 '%rid'  => $role_id,
                 '%acctname' => $account->name,
@@ -307,7 +314,7 @@ function go_user_presave(&$edit, $account, $category)
             ],WATCHDOG_WARNING);
         }
         foreach ($roles_removed as $role_id) {
-          watchdog('role','Removed role "%role" rid:%rid from user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+          watchdog('audit','Removed role "%role" rid:%rid from user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
                 '%role' => $roles[$role_id],
                 '%rid'  => $role_id,
                 '%acctname' => $account->name,
@@ -320,7 +327,7 @@ function go_user_presave(&$edit, $account, $category)
 }
 function go_user_insert(&$edit, $account, $category) {
     global $user;
-    watchdog('user','Added user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+    watchdog('audit','Added user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
         '%acctname'=>$account->name,
         '%acctuid'=>$account->uid,
         '%name'=>$user->name,
@@ -329,7 +336,7 @@ function go_user_insert(&$edit, $account, $category) {
 }
 function go_user_delete($account) {
     global $user;
-    watchdog('user','Deleted user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+    watchdog('audit','Deleted user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
         '%acctname'=>$account->name,
         '%acctuid'=>$account->uid,
         '%name'=>$user->name,

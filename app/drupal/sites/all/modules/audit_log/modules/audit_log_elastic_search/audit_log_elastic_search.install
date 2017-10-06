@@ -1,0 +1,5 @@
+<?php
+/**
+ * @file
+ * Install & update hooks for the Audit elastic search logging module.
+ */

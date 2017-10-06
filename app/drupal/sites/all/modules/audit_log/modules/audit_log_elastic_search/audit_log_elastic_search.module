@@ -1,0 +1,140 @@
+<?php
+/**
+ * @file
+ * Hook implemenations for the Audit elastic search logging module.
+ */
+
+define('AUDIT_LOG_ELASTIC_SEARCH_DEFAULT_INTERVAL', '31d');
+
+/**
+ * Implements hook_audit_log().
+ */
+function audit_log_elastic_search_audit_log(Auditlog $log) {
+  $client_id = audit_log_elastic_search_get_cluster_id();
+  if (!empty($client_id)) {
+    $client = elasticsearch_connector_get_client_by_id($client_id);
+    if ($client) {
+      $doc = array();
+      $doc['index'] = audit_log_elastic_search_get_index_name();
+      $doc['type']  = audit_log_elastic_search_get_type_name();
+
+      // Workaround to order the logs if the same timestamp based on microtime.
+      $microtime_float = explode('.', microtime(TRUE));
+      if (empty($microtime_float[1])) {
+        $microtime = '0.0';
+      }
+      else {
+        $microtime = '0.' . $microtime_float[1];
+      }
+
+      $doc['body'] = (array) $log;
+      $doc['body']['microtime'] = (float) $microtime;
+      $doc['body']['date'] = date('c', $log->timestamp);
+      $doc['body']['_ttl'] = variable_get('audit_log_elastic_search_ttl', AUDIT_LOG_ELASTIC_SEARCH_DEFAULT_INTERVAL);
+
+      // Indexing document.
+      try {
+        $ret = $client->index($doc);
+      }
+      catch (Exception $e) {
+        error_log($e->getMessage());
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_permission().
+ */
+function audit_log_elastic_search_permission() {
+  return array(
+    'audit_log_elastic_search_admin' => array(
+      'title' => t('Administer audit log elastic search'),
+      'description' => t('Perform administration tasks for audit log elastic search.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function audit_log_elastic_search_menu() {
+  $items = array();
+
+  $items['admin/config/system/audit-log'] = array(
+    'title' => 'Audit log settings',
+    'description' => 'Audit log settings',
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('audit_log_elastic_search_admin'),
+    'type' => MENU_NORMAL_ITEM,
+    'file path' => drupal_get_path('module', 'system'),
+    'file' => 'system.admin.inc',
+  );
+
+  $items['admin/config/system/audit-log/elastic-search'] = array(
+    'title' => 'Configure elastich search',
+    'description' => 'Configure elastich search',
+    'access arguments' => array('audit_log_elastic_search_admin'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_log_elastic_search_settings'),
+    'file' => 'audit_log_elastic_search.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Get the cluster_id from settings.
+ *
+ * @return string
+ */
+function audit_log_elastic_search_get_cluster_id() {
+  $client_info = variable_get('audit_log_elastic_search_cluster_id', array());
+  if (isset($client_info['cluster_id'])) {
+    return $client_info['cluster_id'];
+  }
+
+  return FALSE;
+}
+
+/**
+ * Return the real index name.
+ *
+ * @return string
+ */
+function audit_log_elastic_search_get_realindex_name($index_name = NULL) {
+  if (!isset($index_name)) {
+    $cluster_info = variable_get('audit_log_elastic_search_cluster_id', array());
+    $index_name = $cluster_info['index'];
+  }
+
+  return $index_name;
+}
+
+/**
+ * Return the index name (the alias name).
+ *
+ * @return string
+ */
+function audit_log_elastic_search_get_index_name($index_name = NULL) {
+  if (!isset($index_name)) {
+    $cluster_info = variable_get('audit_log_elastic_search_cluster_id', array());
+    $index_name = $cluster_info['index'];
+  }
+
+  return $index_name . '_alias';
+}
+
+/**
+ * Return the name of the Elasticsearch type.
+ *
+ * @return string
+ */
+function audit_log_elastic_search_get_type_name($type = NULL) {
+  if (isset($type)) {
+    return $type;
+  }
+  else {
+    return variable_get('audit_log_elastic_search_type', AUDIT_LOG_ELASTIC_SEARCH_DEFAULT_INTERVAL);
+  }
+}

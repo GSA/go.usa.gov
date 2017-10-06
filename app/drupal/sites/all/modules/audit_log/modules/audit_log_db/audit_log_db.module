@@ -1,0 +1,52 @@
+<?php
+
+/**
+ * @file
+ * Hook implemenations for the Audit database logging module.
+ */
+
+/**
+ * Implements hook_audit_log().
+ */
+function audit_log_db_audit_log(Auditlog $log) {
+  $role_ids = $log->role_ids;
+
+  drupal_write_record('audit_log', $log);
+  foreach ($role_ids as $role_id) {
+    $record = (object) array(
+      'audit_log_id' => $log->id,
+      'role_id' => $role_id,
+    );
+    drupal_write_record('audit_log_roles', $record);
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function audit_log_db_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'audit_log_db') . '/views',
+  );
+}
+
+/**
+ * Helper function.
+ */
+function audit_log_db_audit_action_options() {
+  return drupal_map_assoc(array('view', 'insert', 'update', 'delete'));
+}
+
+
+/**
+ * Implements hook_permission().
+ */
+function audit_log_db_permission() {
+  return array(
+    'audit_log_db_view_admin' => array(
+      'title' => t('View audit log'),
+      'description' => t('Access the default view that shows the log entries.'),
+    ),
+  );
+}

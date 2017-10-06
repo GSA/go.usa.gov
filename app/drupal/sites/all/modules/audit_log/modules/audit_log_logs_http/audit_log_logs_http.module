@@ -1,0 +1,15 @@
+<?php
+/**
+ * @file
+ * Hook implemenations for the Audit logging module.
+ */
+
+/**
+ * Implements hook_audit_log().
+ */
+function audit_log_logs_http_audit_log(Auditlog $log) {
+  $events = &drupal_static('logs_http_events', array());
+  $event = (array) $log;
+  $event = logs_http_array_remove_empty($event);
+  $events[] = $event;
+}
