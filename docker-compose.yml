@@ -9,7 +9,7 @@ services:
         - 443:443
       volumes:
         - ./app/drupal/sites:/var/www/html/sites:rw
-        - ./app/drupal/rootfs/etc/nginx/nginx-dev.conf:/etc/nginx/nginx.conf:rw
+        - ./docker/drupal/rootfs/etc/nginx/nginx-dev.conf:/etc/nginx/nginx.conf:rw
       env_file:
         - dev.env
         #- prod.env
