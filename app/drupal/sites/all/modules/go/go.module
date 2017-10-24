@@ -26,6 +26,29 @@ function go_form_alter(&$form, $form_state, $form_id)
         return $form;
     }
 }
+function go_form_user_login_alter(&$form, &$form_state)
+{
+    if ( module_exists('saml_sp_drupal_login') ) {
+        array_unshift($form['#validate'],'go_2fa_for_admins');
+    }
+}
+function go_form_user_login_block_alter(&$form, &$form_state)
+{
+    if ( module_exists('saml_sp_drupal_login') ) {
+        array_unshift($form['#validate'],'go_2fa_for_admins');
+    }
+}
+function go_2fa_for_admins($form, &$form_state)
+{
+    $name = check_plain($form_state['values']['name']);
+    $user = user_load_by_name($name);
+    if ( empty($user) ) { return; }
+    $role = user_role_load_by_name('admin');
+    if ( empty($role->rid) ) { return; }
+    if ( user_has_role($role->rid, $user) ) {
+      drupal_goto('saml/drupal_login', array('query' => array('returnTo' => 'user')));
+    }
+}
 
 /**
  * Submit function for the Shorten form.
@@ -262,11 +285,77 @@ function reset_key_form_submit($form, &$form_state)
     $_REQUEST['destination'] = 'user/'.$_SESSION['new_key']['uid'];
     unset($_SESSION['new_key']);
 }
-/** Implementation of hook_user */
+function go_audit_log(Auditlog $log) {
+    $roles = user_roles(TRUE);
+    foreach ( $log->role_ids as $i=>$rid  ) {
+        $log->role_ids[$i] = $rid.':'.$roles[$rid];
+    }
+    watchdog('audit',print_r($log,1),null,WATCHDOG_WARNING);
+}
+function go_user_login(&$edit, $account) {
+  watchdog('audit','User login name:"%name" uid:%uid',[
+        '%name' => $account->name,
+        '%uid'  => $account->uid
+  ]);
+}
+function go_user_logout($account) {
+  watchdog('audit','User logout name:"%name" uid:%uid',[
+        '%name' => $account->name,
+        '%uid'  => $account->uid
+  ]);
+}
 function go_user_presave(&$edit, $account, $category)
 {
+    global $user;
     $edit['data']['apiKey'] = $apiKey = md5($account->name.time());
+    if ($account->uid > 0 && array_key_exists('roles', $edit)) {
+        $roles         = user_roles(TRUE);
+        $account       = user_load($account->uid);
+        $old_roles     = array_keys($account->roles);
+        $new_roles     = array_keys(array_filter($edit['roles'],function($v){ return ($v!=0); }));
+        $roles_added   = array_diff($new_roles, $old_roles);
+        $roles_removed = array_diff($old_roles, $new_roles);
+        foreach ($roles_added as $role_id) {
+          watchdog('audit','Added role "%role" rid:%rid to user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+                '%role' => $roles[$role_id],
+                '%rid'  => $role_id,
+                '%acctname' => $account->name,
+                '%acctuid'  => $account->uid,
+                '%name' => $user->name,
+                '%uid'  => $user->uid
+            ],WATCHDOG_WARNING);
+        }
+        foreach ($roles_removed as $role_id) {
+          watchdog('audit','Removed role "%role" rid:%rid from user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+                '%role' => $roles[$role_id],
+                '%rid'  => $role_id,
+                '%acctname' => $account->name,
+                '%acctuid'  => $account->uid,
+                '%name' => $user->name,
+                '%uid'  => $user->uid
+            ],WATCHDOG_WARNING);
+        }
+    }
 }
+function go_user_insert(&$edit, $account, $category) {
+    global $user;
+    watchdog('audit','Added user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+        '%acctname'=>$account->name,
+        '%acctuid'=>$account->uid,
+        '%name'=>$user->name,
+        '%uid'=>$user->uid
+    ],WATCHDOG_WARNING);
+}
+function go_user_delete($account) {
+    global $user;
+    watchdog('audit','Deleted user "%acctname" uid:%acctuid, by user "%name" uid:%uid',[
+        '%acctname'=>$account->name,
+        '%acctuid'=>$account->uid,
+        '%name'=>$user->name,
+        '%uid'=>$user->uid
+    ],WATCHDOG_WARNING);
+}
+/** Implementation of hook_user */
 function go_user_view($account)
 {
     $req = "'".preg_replace('/^https?:/', '', url('api/shorten.jsonp', array('absolute' => true)))

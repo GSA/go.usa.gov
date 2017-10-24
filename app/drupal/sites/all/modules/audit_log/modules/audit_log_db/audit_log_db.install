@@ -1,0 +1,133 @@
+<?php
+/**
+ * @file
+ * Install & update hooks for the Audit database logging module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function audit_log_db_schema() {
+  $schema = array();
+
+  $schema['audit_log'] = array(
+    'description' => 'Table that contains audit logs.',
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique audit ID.',
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid that performed the action.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The {users}.name that performed the action.',
+        'type' => 'varchar',
+        'length' => 60,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'url' => array(
+        'description' => 'The url on which the action was performed.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_id' => array(
+        'description' => 'The entity id of the entity on which the action was performed.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'entity_type' => array(
+        'description' => 'The entity type of the entity on which the action was performed.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'bundle' => array(
+        'description' => 'The bundle of the entity on which the action was performed.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_label' => array(
+        'description' => 'The label of the entity on which the action was performed.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'audit_action' => array(
+        'description' => 'The action that was performed.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'timestamp' => array(
+        'description' => 'The time the action was performed.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'uid' => array('uid'),
+      'entity_type_id' => array('entity_type', 'entity_id'),
+      'bundle' => array('bundle'),
+      'audit_action' => array('audit_action'),
+      'timestamp' => array('timestamp'),
+    ),
+    'foreign keys' => array(
+      'users' => array(
+        'table' => 'useres',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+  );
+
+  $schema['audit_log_roles'] = array(
+    'description' => 'Maps audit logs to roles.',
+    'fields' => array(
+      'audit_log_id' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Primary Key: {audit_log}.id for audit logs.',
+      ),
+      'role_id' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Primary Key: {role}.rid for role.',
+      ),
+    ),
+    'primary key' => array('audit_log_id', 'role_id'),
+    'indexes' => array(
+      'role_id' => array('role_id'),
+    ),
+    'foreign keys' => array(
+      'audit_log' => array(
+        'table' => 'audit_log',
+        'columns' => array('audit_log_id' => 'id'),
+      ),
+      'role' => array(
+        'table' => 'roles',
+        'columns' => array('role_id' => 'rid'),
+      ),
+    ),
+  );
+
+  return $schema;
+}

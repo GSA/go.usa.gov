@@ -1,0 +1,397 @@
+Only in .: d.out
+Common subdirectories: ./includes and /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/includes
+Common subdirectories: ./modules and /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/modules
+diff ./saml_sp.admin.inc /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/saml_sp.admin.inc
+35,47c35,47
+<   $form['export_type'] = array(
+<    '#type' => 'value',
+<    '#value' => isset($saml_idp->export_type) ? $saml_idp->export_type : NULL,
+<   );
+< 
+<    // If this is an update to an existing IDP, track the original machine name,
+<    // in case it is changed.
+<    if (!empty($saml_idp->machine_name)) {
+<      $form['orig_machine_name'] = array(
+<        '#type' => 'value',
+<        '#value' => $saml_idp->machine_name,
+<      );
+<    }
+---
+>  $form['export_type'] = array(
+>   '#type' => 'value',
+>   '#value' => isset($saml_idp->export_type) ? $saml_idp->export_type : NULL,
+>  );
+> 
+>  // If this is an update to an existing IDP, track the original machine name,
+>  // in case it is changed.
+>  if (!empty($saml_idp->machine_name)) {
+>    $form['orig_machine_name'] = array(
+>      '#type' => 'value',
+>      '#value' => $saml_idp->machine_name,
+>    );
+>  }
+127,178d126
+<   $form['idp']['idp_x509_cert'] = array(
+<     '#type' => 'fieldset',
+<     '#title' => t('x.509 Certificates'),
+<     '#tree' => TRUE,
+<     '#description' => t('Enter the application certificate(s) provided by the IdP. When an IdP is switching to a new certificate they will occasionally provide the certificate before hand to those with a Relying Party Trust (RTP). The Certificates listed will be tried in the order they are entered.'),
+<   );
+<   $certs = explode("\n", $saml_idp->x509_cert);
+<   $count = 0;
+<   if (!empty($certs)) {
+<     foreach ($certs AS $encoded_cert) {
+<       $encoded_cert = trim($encoded_cert);
+<       $form['idp']['idp_x509_cert'][$count] = array(
+<         '#type' => 'fieldset',
+<         '#title' => t('x.509 Certificate @count', array('@count' => $count)),
+<       );
+<       if (function_exists('openssl_x509_parse')) {
+<         $cert = openssl_x509_parse("-----BEGIN CERTIFICATE-----\n" . $encoded_cert . "\n-----END CERTIFICATE-----");
+<         // flatten the issuer array
+<         foreach ($cert['issuer'] AS $key => &$value) {
+<           if (is_array($value)) {
+<             $value = implode("/", $value);
+<           }
+<         }
+<         if ($cert) {
+<           $title = t('Name: %cert-name<br/>Issued by: %issuer<br/>Valid: %valid-from - %valid-to', array(
+<             '%cert-name' => $cert['name'],
+<             '%issuer' => implode('/', $cert['issuer']),
+<             '%valid-from' => date('c', $cert['validFrom_time_t']),
+<             '%valid-to' => date('c', $cert['validTo_time_t']),
+<           ));
+<         }
+<       }
+<       if (!isset($title) || empty($title)) {
+<         $title = t('Certificate');
+<       }
+<       $form['idp']['idp_x509_cert'][$count]['cert'] = array(
+<         '#type' => 'textarea',
+<         '#title' => $title,
+<         '#description' => t('Enter an application certificate provided by the IdP.'),
+<         '#default_value' => $encoded_cert,
+<         '#max_length' => 1024,
+<       );
+< 
+<       $form['idp']['idp_x509_cert'][$count]['details'] = array(
+<         '#type' => 'fieldset',
+<         '#collapsible' => TRUE,
+<         '#collapsed' => TRUE,
+<         '#title' => t('Details', array('@count' => $count)),
+<       );
+<       $form['idp']['idp_x509_cert'][$count]['details']['markup'] = array(
+<         '#markup' => '<pre>' . print_r($cert, TRUE) . '</pre>'
+<       );
+180,201c128,135
+<       $count++;
+<     }
+<     $form['idp']['idp_x509_cert'][$count]['cert'] = array(
+<       '#type' => 'textarea',
+<       '#title' => t('x.509 Certificate @count', array('@count' => $count)),
+<       '#description' => t('Enter an application certificate provided by the IdP'),
+<       '#default_value' => '',
+<       '#max_length' => 1024,
+<     );
+<   }
+< 
+<   // get the list of supported contexts
+<   $contexts = saml_sp_get_authn_contexts();
+<   $authn_context_class_ref_options = array();
+<   // check to see if this is the old style setting () before multiple contexts
+<   // were supported
+<   if (strpos($saml_idp->authn_context_class_ref, '|') === FALSE && strpos($saml_idp->authn_context_class_ref, ':')) {
+<     $selected_contexts = array($contexts[$saml_idp->authn_context_class_ref]['id']);
+<   }
+<   else {
+<     $selected_contexts = explode('|', $saml_idp->authn_context_class_ref);
+<   }
+---
+>   $form['idp']['idp_x509_cert'] = array(
+>     '#type' => 'textarea',
+>     '#title' => t('x.509 Certificate'),
+>     '#description' => t('Enter the application certificate provided by the IdP.'),
+>     '#default_value' => $saml_idp->x509_cert,
+>     '#required' => TRUE,
+>     '#max_length' => 1024,
+>   );
+203,208c137,144
+<   $authn_context_default = array();
+<   // create options array as well as default array
+<   foreach ($contexts AS $key => $value) {
+<     $authn_context_class_ref_options[$value['id']] = $value['label'];
+<     $authn_context_default[$value['id']] = array_search($value['id'], $selected_contexts) !== FALSE ? $value['id'] : 0;
+<   }
+---
+>   $authn_context_class_ref_options = array(
+>     'urn:oasis:names:tc:SAML:2.0:ac:classes:Password'                   => t('User Name and Password'),
+>     'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport' => t('Password Protected Transport'),
+>     'urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient'                  => t('Transport Layer Security (TLS) Client'),
+>     'urn:oasis:names:tc:SAML:2.0:ac:classes:X509'                       => t('X.509 Certificate'),
+>     'urn:federation:authentication:windows'                             => t('Integrated Windows Authentication'),
+>     'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos'                   => t('Kerberos'),
+>   );
+211,214c147,150
+<     '#type'           => 'checkboxes',
+<     '#title'          => t('Authentication Method (Context)'),
+<     '#description'    => t('What authentication method(s) would you like to use with this IdP?'),
+<     '#default_value'  => $authn_context_default,
+---
+>     '#type'           => 'select',
+>     '#title'          => t('Authentication Method'),
+>     '#description'    => t('What authentication method would you like to use with this IdP?'),
+>     '#default_value'  => $saml_idp->authn_context_class_ref,
+233,247d168
+<   // handle multiple certs
+<   $certs = array();
+<   foreach ($form_state['values']['idp_x509_cert'] AS $cert) {
+<     if (!empty($cert['cert'])) {
+<       $certs[] = $cert['cert'];
+<     }
+<   }
+<   // handle multiple Authn Contexts
+<   $contexts = array();
+<   foreach ($form_state['values']['authn_context_class_ref'] AS $value) {
+<     if ($value) {
+<       $contexts[] = $value;
+<     }
+<   }
+< 
+261,262c182,183
+<     'x509_cert'               => implode("\n", $certs),
+<     'authn_context_class_ref' => implode('|', $contexts),
+---
+>     'x509_cert'               => $form_state['values']['idp_x509_cert'],
+>     'authn_context_class_ref' => $form_state['values']['authn_context_class_ref'],
+547,552c468,475
+<   $form['saml_sp__debug'] = array(
+<     '#type'             => 'checkbox',
+<     '#title'            => t('Debug'),
+<     '#description'      => t('Works with Devel module to display SAML requests and Responses for review.'),
+<     '#default_value'    => variable_get('saml_sp__debug', FALSE),
+<   );
+---
+>   if ( module_exists('devel')) {
+>     $form['saml_sp__debug'] = array(
+>       '#type'             => 'checkbox',
+>       '#title'            => t('Debug'),
+>       '#description'      => t('Works with Devel module to display SAML requests and Responses for review.'),
+>       '#default_value'    => variable_get('saml_sp__debug', FALSE),
+>     );
+>   }
+diff ./saml_sp.info /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/saml_sp.info
+11a12
+> files[] = includes/saml_sp.Response.inc
+14,15c15,16
+< ; Information added by Drupal.org packaging script on 2017-09-22
+< version = "7.x-2.1"
+---
+> ; Information added by Drupal.org packaging script on 2016-02-23
+> version = "7.x-2.0-beta3"
+18c19
+< datestamp = "1506101047"
+---
+> datestamp = "1456250040"
+diff ./saml_sp.make /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/saml_sp.make
+7d6
+< libraries[php-saml][download][tag] = "v2.10.5"
+10,12c9,11
+< ;libraries[xmlseclibs][download][type] = file
+< ;libraries[xmlseclibs][download][url] = https://xmlseclibs.googlecode.com/files/xmlseclibs-1.3.1.tar.gz
+< ;libraries[xmlseclibs][destination] = "libraries"
+---
+> libraries[xmlseclibs][download][type] = file
+> libraries[xmlseclibs][download][url] = https://xmlseclibs.googlecode.com/files/xmlseclibs-1.3.1.tar.gz
+> libraries[php-saml][destination] = "libraries"
+diff ./saml_sp.module /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/saml_sp.module
+15a16
+> define('XMLSECLIBS_MIN_VERSION', '1.0');
+266d266
+<         'extlib/xmlseclibs/xmlseclibs.php',
+278a279,297
+>     'dependencies' => array(
+>       'xmlseclibs',
+>     ),
+>   );
+> 
+>   $libraries['xmlseclibs'] = array(
+>     'name' => 'XML Encryption and Signatures',
+>     'vendor url' => 'https://code.google.com/p/xmlseclibs/',
+>     'download url' => 'https://xmlseclibs.googlecode.com/files/xmlseclibs-1.3.1.tar.gz',
+>     'version arguments' => array(
+>       'file'    => 'xmlseclibs.php',
+>       'pattern' => '/@version\s*(.*)$/',
+>       'lines'   => 100,
+>     ),
+>     'files' => array(
+>       'php' => array(
+>         'xmlseclibs.php',
+>       ),
+>     ),
+320a340,370
+> 
+> 
+>     // xmlseclibs library
+>     $library = libraries_detect('xmlseclibs');
+>     $error_type = isset($library['error']) ? drupal_ucfirst($library['error']) : '';
+>     $error_message = isset($library['error message']) ? $library['error message'] : '';
+>     $library_name = $t($library['name']);
+> 
+>     if (empty($library['installed'])) {
+>       $requirements[$library['machine name']] = array(
+>         'title' => $library_name,
+>         'value' => $t('@e: At least @a', array('@e' => $error_type, '@a' => XMLSECLIBS_MIN_VERSION)),
+>         'severity' => REQUIREMENT_ERROR,
+>         'description' => $t('!error You need to download the !library, extract the archive and place the !machine_name directory in the %path directory on your server.', array('!error' => $error_message, '!library' => l($library_name, $library['download url']), '%path' => 'sites/all/libraries', '!machine_name' => $library['machine name'])),
+>       );
+>     }
+>     elseif (version_compare($library['version'], XMLSECLIBS_MIN_VERSION, '>=')) {
+>       $requirements[$library['machine name']] = array(
+>         'title' => $library_name,
+>         'severity' => REQUIREMENT_OK,
+>         'value' => $library['version'],
+>       );
+>     }
+>     else {
+>       $requirements[$library['machine name']] = array(
+>         'title' => $library_name,
+>         'value' => $t('At least @a', array('@a' => XMLSECLIBS_MIN_VERSION)),
+>         'severity' => REQUIREMENT_ERROR,
+>         'description' => $t('You need to download a later version of the !library and replace the old version located in the %path directory on your server.', array('!library' => l($library_name, $library['download url']), '%path' => $library['library path'])),
+>       );
+>     }
+337,342c387
+<   $library = _saml_sp__prepare();
+<   if (!$library['loaded']) {
+<     drupal_set_message(t('PHP-SAML library could not be loaded.'));
+<     return array();
+<   }
+< 
+---
+>   _saml_sp__prepare();
+362,366d406
+<   if (strpos($idp->x509_cert, "\n")) {
+<     // there are possibly multiple x.509 certs, use the first one
+<     $idp_certs = explode("\n", $idp->x509_cert);
+<     $idp->x509_cert = $idp_certs[0];
+<   }
+370,373c410
+<   if ($idp->authn_context_class_ref) {
+<     // we don't always want to specify an Authn Context
+<     $settings['idp']['AuthnContextClassRef'] = $idp->authn_context_class_ref;
+<   }
+---
+>   $settings['idp']['AuthnContextClassRef'] = $idp->authn_context_class_ref;
+447,449d483
+<   if (variable_get('saml_sp__debug', FALSE)) {
+<     watchdog('saml_sp', '$settings => <pre>@settings</pre>', array('@settings' => print_r($settings, TRUE)), WATCHDOG_DEBUG);
+<   }
+479,481c513
+<   if (empty($settings)) {
+<     return array(t('Settings could not be loaded and metadata couldn\'t be generated.'));
+<   }
+---
+> 
+519c551
+<     // By default the user is returned to the front page in the same language
+---
+>     // By default user is returned to the front page in the same language
+525,527d556
+<   if (variable_get('saml_sp__debug', FALSE)) {
+<     watchdog('saml_sp', '$auth => <pre>@auth</pre>', array('@auth' => print_r($auth, TRUE)), WATCHDOG_DEBUG);
+<   }
+602c631
+<   return libraries_load('php-saml');
+---
+>   libraries_load('php-saml');
+657c686
+<       watchdog('saml_sp', 'SAML login attempt with inbound ID: %id<br/>XML => <br/><pre>@xml</pre>', array('%id' => $id, '@xml' => $xml));
+---
+>       watchdog('saml_sp', 'SAML login attempt with inbound ID: %id', array('%id' => $id));
+669c698
+<  * a list of supported AuthnContexts
+---
+>  * Implements hook_user_login
+671,679c700,704
+< function saml_sp_get_authn_contexts() {
+<   return array(
+<     'urn:oasis:names:tc:SAML:2.0:ac:classes:Password' => array('id' => 'P', 'label' => t('User Name and Password')),
+<     'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport' => array('id' => 'PPT', 'label' =>t('Password Protected Transport')),
+<     'urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient' => array('id' => 'TLS', 'label' => t('Transport Layer Security (TLS) Client')),
+<     'urn:oasis:names:tc:SAML:2.0:ac:classes:X509' => array('id' => 'x509', 'label' => t('X.509 Certificate')),
+<     'urn:federation:authentication:windows' => array('id' => 'IWA', 'label' => t('Integrated Windows Authentication')),
+<     'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos' => array('id' => 'K', 'label' => t('Kerberos')),
+<   );
+---
+> function saml_sp_user_login(&$edit, $account) {
+>   // Redirecting user to desired path
+>   if (isset($edit['redirect']) && !empty($edit['redirect'])) {
+>     drupal_goto($edit['redirect']);
+>   }
+diff ./saml_sp.pages.inc /Users/dnarkiewicz/Docker/usagov-docker/app/usagov-hub/sites/all/modules/patched/saml_sp/saml_sp.pages.inc
+24,26d23
+<     if (variable_get('saml_sp__debug', FALSE)) {
+<       watchdog('saml_sp', 'Inbound ID: @inbound_id', array('@inbound_id' => $inbound_id), WATCHDOG_DEBUG);
+<     }
+28,30d24
+<       if (variable_get('saml_sp__debug', FALSE)) {
+<         watchdog('saml_sp', 'Request: <pre>@request</pre>', array('@request' => print_r($request, TRUE)), WATCHDOG_DEBUG);
+<       }
+32,70c26,30
+<       if (variable_get('saml_sp__debug', FALSE)) {
+<         watchdog('saml_sp', 'IdP cert(s): <pre>@certs</pre>', array('@certs' => $idp->x509_cert), WATCHDOG_DEBUG);
+<       }
+<       // explode the certs string
+<       $idp_certs = explode("\n", $idp->x509_cert);
+<       if (!empty($idp_certs)) {
+<         $is_valid = FALSE;
+<         // try each cert
+<         foreach ($idp_certs AS $cert) {
+<           if ($is_valid) {
+<             // we have already validated
+<             continue;
+<           }
+<           // set the cert we are trying
+<           $idp->x509_cert = trim($cert);
+<           if (variable_get('saml_sp__debug', FALSE)) {
+<             watchdog('saml_sp', 'Attempting validation with: $idp => <pre>@idp</pre>', array('@idp' => print_r($idp, TRUE)), WATCHDOG_DEBUG);
+<           }
+<           $settings = saml_sp__get_settings($idp);
+<           // Creating Saml2 Settings object from array
+<           $saml_settings = new OneLogin_Saml2_Settings($settings);
+<           $saml_response = new OneLogin_Saml2_Response($saml_settings, $_POST['SAMLResponse']);
+< 
+<           // Try to check the validity of the samlResponse.
+<           try {
+<             // $saml_response->isValid() will throw various exceptions to communicate
+<             // any errors. Sadly, these are all of type Exception - no subclassing.
+<             $is_valid = $saml_response->isValid();
+<             if (variable_get('saml_sp__debug', FALSE)) {
+<               watchdog('saml_sp', 'Certificate worked!: %cert', array('%cert' => $cert), WATCHDOG_DEBUG);
+<             }
+<           }
+<           catch (Exception $e) {
+<             // @TODO: inspect the Exceptions, and log a meaningful error condition.
+<             watchdog('saml_sp', 'Invalid response, %exception', array('%exception' => $e));
+<             $is_valid = FALSE;
+<           }
+<         }
+<       }
+---
+>       $settings = saml_sp__get_settings($idp);
+>       // Creating Saml2 Settings object from array
+>       $saml_settings = new OneLogin_Saml2_Settings($settings);
+>       $saml_response = new saml_sp_Response($saml_settings, $_POST['SAMLResponse']);
+> 
+73a34,44
+>       // Try to check the validity of the samlResponse.
+>       try {
+>         // $saml_response->isValid() will throw various exceptions to communicate
+>         // any errors. Sadly, these are all of type Exception - no subclassing.
+>         $is_valid = $saml_response->isValid();
+>       }
+>       catch (Exception $e) {
+>         // @TODO: inspect the Exceptions, and log a meaningful error condition.
+>         watchdog('saml_sp', 'Invalid response, %exception', array('%exception' => $e));
+>         $is_valid = FALSE;
+>       }

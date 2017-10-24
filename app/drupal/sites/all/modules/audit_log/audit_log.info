@@ -1,0 +1,13 @@
+name = Audit log
+description = Provides a framework with swappable storage for logging entity audit events.
+package = Audit log
+core = 7.x
+
+files[] = includes/AuditLog.php
+
+; Information added by Drupal.org packaging script on 2015-08-18
+version = "7.x-1.2"
+core = "7.x"
+project = "audit_log"
+datestamp = "1439909305"
+
