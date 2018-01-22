@@ -136,10 +136,9 @@ function shorturl_shorturl_clickthrough($click)
         $metric_month = date('Y_m');
         $metric_year  = date('Y');
 
-        db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
-
         try {
             db_set_active('metrics');
+            db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
             $rm = @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
             db_set_active();
         } catch (Exception $e) {
@@ -148,6 +147,7 @@ function shorturl_shorturl_clickthrough($click)
         }
         try {
             db_set_active('metrics');
+            db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
             $rd = @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_day}  (day,  lid,clicks) VALUES (date_format(now(),'%Y-%m-%d 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
             db_set_active();
         } catch (Exception $e) {
@@ -156,6 +156,7 @@ function shorturl_shorturl_clickthrough($click)
         }
         try {
             db_set_active('metrics');
+            db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
             $rh = @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_hour} (hour, lid,clicks) VALUES (date_format(now(),'%Y-%m-%d %H:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
             db_set_active();
         } catch (Exception $e) {
@@ -171,6 +172,7 @@ function shorturl_shorturl_clickthrough($click)
             if (!$rm) {
                 try {
                    db_set_active('metrics');
+                   db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
                    @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
                     db_set_active();
                 } catch (Exception $e) {
@@ -181,6 +183,7 @@ function shorturl_shorturl_clickthrough($click)
             if (!$rd) {
                 try {
                     db_set_active('metrics');
+                    db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
                     @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_day}  (day,  lid,clicks) VALUES (date_format(now(),'%Y-%m-%d 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
                     db_set_active();
                 } catch (Exception $e) {
@@ -191,6 +194,7 @@ function shorturl_shorturl_clickthrough($click)
             if (!$rh) {
                 try {
                     db_set_active('metrics');
+                    db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
                     @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_hour} (hour, lid,clicks) VALUES (date_format(now(),'%Y-%m-%d %H:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
                     db_set_active();
                 } catch (Exception $e) {
