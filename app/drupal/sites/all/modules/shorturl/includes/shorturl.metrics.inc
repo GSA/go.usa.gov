@@ -90,31 +90,46 @@ function shorturl_shorturl_clickthrough($click)
             watchdog('shorturl', 'Error updating shorturl_link count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
         }
 
-        db_set_active('metrics');
+
 
         try {
+            db_set_active('metrics');
             @db_query('INSERT INTO {shorturl_metric_referrer}      (refmd5,referrer,clicks)     VALUES (MD5(:ref),:ref,1)      ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':ref' => $click['referrer']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_referrer count, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%ref' => $click['referrer']), WATCHDOG_ERROR);
         }
         try {
+            db_set_active('metrics');
             @db_query('INSERT INTO {shorturl_metric_domain}        (domain,clicks)              VALUES (:dom,1)                ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':dom' => $click['domain']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_domain count, token(%token) lid(%lid) orig_url(%orig_url) domain(%dom)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%dom' => $click['domain']), WATCHDOG_ERROR);
         }
         try {
+            db_set_active('metrics');
             @db_query('INSERT INTO {shorturl_metric_destination}   (destmd5,destination,clicks) VALUES (MD5(:url),:url,1)      ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':url' => $click['orig_url']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_destination count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
         }
         try {
+            db_set_active('metrics');
             @db_query('INSERT INTO {shorturl_metric_link_referrer} (lid,refmd5,referrer,clicks) VALUES (:lid,MD5(:ref),:ref,1) ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':lid' => $click['lid'], ':ref' => $click['referrer']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_referrer count, token(%token) lid(%lid) orig_url(%orig_url) referrer(%ref)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%ref' => $click['referrer']), WATCHDOG_ERROR);
         }
         try {
+            db_set_active('metrics');
             @db_query('INSERT INTO {shorturl_metric_link_domain}   (lid,domain,clicks)          VALUES (:lid,:dom,1)           ON DUPLICATE KEY UPDATE clicks=clicks+1', array(':lid' => $click['lid'], ':dom' => $click['domain']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_domain count, token(%token) lid(%lid) orig_url(%orig_url) domain(%dom)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url'], '%dom' => $click['domain']), WATCHDOG_ERROR);
         }
 
@@ -124,44 +139,62 @@ function shorturl_shorturl_clickthrough($click)
         db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
 
         try {
+            db_set_active('metrics');
             $rm = @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_{$metric_year}_month count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
         }
         try {
+            db_set_active('metrics');
             $rd = @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_day}  (day,  lid,clicks) VALUES (date_format(now(),'%Y-%m-%d 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_{$metric_month}_day count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
         }
         try {
+            db_set_active('metrics');
             $rh = @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_hour} (hour, lid,clicks) VALUES (date_format(now(),'%Y-%m-%d %H:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+            db_set_active();
         } catch (Exception $e) {
+            db_set_active();
             watchdog_exception('shorturl', $e, 'Error updating shorturl_metric_link_{$metric_month}_hour count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
         }
 
         /// if we got any error, assume cron didn't update tables for us and try to do so here, then rerun inserts
         if (!($rm && $rd && $rh)) {
             shorturl_metrics_cron(); /// creates missing tables
-            db_set_active('metrics');
+            // db_set_active('metrics');
             /// retry any failed inserts
             if (!$rm) {
                 try {
-                    @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                   db_set_active('metrics');
+                   @db_query("INSERT INTO {shorturl_metric_link_{$metric_year}_month} (month,lid,clicks) VALUES (date_format(now(),'%Y-%m-00 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                    db_set_active();
                 } catch (Exception $e) {
+                    db_set_active();
                     watchdog_exception('shorturl', $e, 'Error retrying updating shorturl_metric_link_{$metric_year}_month count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
                 }
             }
             if (!$rd) {
                 try {
+                    db_set_active('metrics');
                     @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_day}  (day,  lid,clicks) VALUES (date_format(now(),'%Y-%m-%d 00:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                    db_set_active();
                 } catch (Exception $e) {
+                    db_set_active();
                     watchdog_exception('shorturl', $e, 'Error retryingupdating shorturl_metric_link_{$metric_month}_day count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
                 }
             }
             if (!$rh) {
                 try {
+                    db_set_active('metrics');
                     @db_query("INSERT INTO {shorturl_metric_link_{$metric_month}_hour} (hour, lid,clicks) VALUES (date_format(now(),'%Y-%m-%d %H:00:00'),:lid,1) ON DUPLICATE KEY UPDATE clicks=clicks+1", array(':lid' => $click['lid']));
+                    db_set_active();
                 } catch (Exception $e) {
+                    db_set_active();
                     watchdog_exception('shorturl', $e, 'Error retrying updating shorturl_metric_link_{$metric_month}_hour count, token(%token) lid(%lid) orig_url(%orig_url)', array('%token' => $click['token'], '%lid' => $click['lid'], '%orig_url' => $click['orig_url']), WATCHDOG_ERROR);
                 }
             }
