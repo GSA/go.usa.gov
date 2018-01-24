@@ -40,13 +40,15 @@ function go_form_user_login_block_alter(&$form, &$form_state)
 }
 function go_2fa_for_admins($form, &$form_state)
 {
-    $name = check_plain($form_state['values']['name']);
-    $user = user_load_by_name($name);
-    if ( empty($user) ) { return; }
-    $role = user_role_load_by_name('admin');
-    if ( empty($role->rid) ) { return; }
-    if ( user_has_role($role->rid, $user) ) {
-      drupal_goto('saml/drupal_login', array('query' => array('returnTo' => 'user')));
+    if ( module_exists('saml_sp_drupal_login') ) {
+        $name = check_plain($form_state['values']['name']);
+        $user = user_load_by_name($name);
+        if ( empty($user) ) { return; }
+        $role = user_role_load_by_name('admin');
+        if ( empty($role->rid) ) { return; }
+        if ( user_has_role($role->rid, $user) ) {
+          drupal_goto('saml/drupal_login', array('query' => array('returnTo' => 'user')));
+        }
     }
 }
 

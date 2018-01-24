@@ -136,6 +136,10 @@ function shorturl_shorturl_clickthrough($click)
         $metric_month = date('Y_m');
         $metric_year  = date('Y');
 
+        $rm = null;
+        $rd = null;
+        $rh = null;
+
         try {
             db_set_active('metrics');
             db_query("set SESSION sql_mode = 'ALLOW_INVALID_DATES'");
