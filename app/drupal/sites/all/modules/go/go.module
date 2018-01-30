@@ -29,13 +29,13 @@ function go_form_alter(&$form, $form_state, $form_id)
 function go_form_user_login_alter(&$form, &$form_state)
 {
     if ( module_exists('saml_sp_drupal_login') ) {
-        //array_unshift($form['#validate'],'go_2fa_for_admins');
+        array_unshift($form['#validate'],'go_2fa_for_admins');
     }
 }
 function go_form_user_login_block_alter(&$form, &$form_state)
 {
     if ( module_exists('saml_sp_drupal_login') ) {
-        //array_unshift($form['#validate'],'go_2fa_for_admins');
+        array_unshift($form['#validate'],'go_2fa_for_admins');
     }
 }
 function go_2fa_for_admins($form, &$form_state)
