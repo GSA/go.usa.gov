@@ -1755,3 +1755,11 @@ function _jsonp($response, $callback = 'callback')
         echo ');';
     }
 }
+
+function shorturl_form_alter(&$form, $form_state, $form_id) {
+    if ($form_id == 'user_login_block') {
+      if ( isset($form['saml_sp_drupal_login_links']) ) {
+        unset($form['saml_sp_drupal_login_links']);
+      }
+    }
+}
