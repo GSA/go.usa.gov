@@ -47,6 +47,7 @@ function go_2fa_for_admins($form, &$form_state)
         $role = user_role_load_by_name('admin');
         if ( empty($role->rid) ) { return; }
         if ( user_has_role($role->rid, $user) ) {
+            return;/// SUPER TEMP
           watchdog('audit','User '.$name.' is admin: redirected to SecureAuth',null,WATCHDOG_WARNING);
           drupal_goto('saml/drupal_login', array('query' => array('returnTo' => 'user')));
         }
