@@ -12,13 +12,42 @@
  */
 
 // require PHP SAML 2.0 or greater
-define('PHP_SAML_LIBRARY_MIN_VERSION', '2.0.0');
+define('PHP_SAML_LIBRARY_MIN_VERSION', '2.10.6');
 
 // Default name to identify this application to IDPs.
 define('DRUPAL_SAML_SP__APP_NAME_DEFAULT', 'drupal-saml-sp');
 
 // Expect a response from the IDP within 2 minutes.
-define('SAML_SP_REQUEST_CACHE_TIMEOUT', 120);
+define('SAML_SP_REQUEST_STORE_TIMEOUT', 120);
+
+/**
+ * Implements hook_init().
+ */
+function saml_sp_init() {
+  if (user_access('configure saml sp') &&
+      function_exists('openssl_x509_parse') &&
+      !empty(variable_get('saml_sp__cert_location', '')) &&
+      file_exists(variable_get('saml_sp__cert_location', ''))
+  ) {
+    $library = _saml_sp__prepare();
+    $encoded_cert = trim(file_get_contents(variable_get('saml_sp__cert_location', '')));
+    $cert = openssl_x509_parse(OneLogin_Saml2_Utils::formatCert($encoded_cert));
+    $test_time = REQUEST_TIME;
+    if ($cert['validTo_time_t'] < $test_time) {
+      drupal_set_message(t('Your site\'s SAML certificate is expired. Please replace it with another certificate and request an update to your Relying Party Trust (RPT). You can enter in a location for the new certificate/key pair on the <a href="!url">SAML Service Providers</a> page. Until the certificate/key pair is replaced your SAML authentication service will not function.'
+      , array(
+         '!url' => url('admin/config/people/saml_sp/setup'),
+       )), 'error', FALSE);
+    }
+    else if (($cert['validTo_time_t'] - $test_time) < (60 * 60 * 24 * 30)) {
+      drupal_set_message(t('Your site\'s SAML certificate will expire in %interval. Please replace it with another certificate and request an update to your Relying Party Trust (RPT). You can enter in a location for the new certificate/key pair on the <a href="!url">SAML Service Providers</a> page. Failure to update this certificate and update the Relying Party Trust (RPT) will result in the SAML authentication service not working.',
+        array(
+          '%interval' => format_interval($cert['validTo_time_t'] - $test_time, 2),
+          '!url' => url('admin/config/people/saml_sp/setup'),
+        )),'warning', FALSE);
+    }
+  }
+}
 
 /**
  * Implements hook_theme().
@@ -181,8 +210,23 @@ function saml_sp__metadata_url() {
  * @return Object
  */
 function saml_sp_idp_load($idp_machine_name) {
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', __function__ . ' - $idp_machine_name => <pre>@idp</pre>', array('@idp' => print_r($idp_machine_name, TRUE)), WATCHDOG_DEBUG);
+  }
   $all_idps = saml_sp__load_all_idps();
-  return (isset($all_idps[$idp_machine_name]) ? $all_idps[$idp_machine_name] : FALSE);
+  if (isset($all_idps[$idp_machine_name])) {
+    $idp = $all_idps[$idp_machine_name];
+    if (!isset($idp->machine_name)) {
+      $idp->machine_name = $idp_machine_name;
+    }
+  }
+  else {
+    $idp = FALSE;
+  }
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', __function__ . ' - $idp => <pre>@idp</pre>', array('@idp' => print_r($idp, TRUE)), WATCHDOG_DEBUG);
+  }
+  return $idp;
 }
 
 /**
@@ -195,7 +239,7 @@ function saml_sp_idp_load($idp_machine_name) {
  * - app_name
  * - nameid_field
  * - login_url
- * - x509_cert
+ * - x509_certs
  *
  * @return Int
  * One of:
@@ -240,6 +284,9 @@ function saml_sp__load_all_idps() {
   // Use CTools export API to fetch all presets.
   ctools_include('export');
   $result = ctools_export_crud_load_all('saml_sp_idps');
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', __function__ . ' - $result => <pre>@result</pre>', array('@result' => print_r($result, TRUE)), WATCHDOG_DEBUG);
+  }
   return $result;
 }
 
@@ -315,7 +362,7 @@ function saml_sp_requirements($phase) {
         'title' => $t('PHP SAML library'),
         'value' => $t('At least @a', array('@a' => PHP_SAML_LIBRARY_MIN_VERSION)),
         'severity' => REQUIREMENT_ERROR,
-        'description' => $t('You need to download a later version of the !library and replace the old version located in the %path directory on your server.', array('!library' => l($t('PHP SAML library'), $library['download url']), '%path' => $library['library path'])),
+        'description' => $t('You need to download a later version of the !library and replace the old version (%current_version) located in the %path directory on your server.', array('!library' => l($t('PHP SAML library'), $library['download url']), '%path' => $library['library path'], '%current_version' => $library['version'])),
       );
     }
   }
@@ -358,19 +405,10 @@ function saml_sp__get_settings($idp) {
     'binding' => 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect',
   );
 
-  // The IdP's public x.509 certificate.
-  if (strpos($idp->x509_cert, "\n")) {
-    // there are possibly multiple x.509 certs, use the first one
-    $idp_certs = explode("\n", $idp->x509_cert);
-    $idp->x509_cert = $idp_certs[0];
-  }
-  $settings['idp']['x509cert'] = $idp->x509_cert;
-
-  // The authentication method we want to use with the IdP
-  if ($idp->authn_context_class_ref) {
-    // we don't always want to specify an Authn Context
-    $settings['idp']['AuthnContextClassRef'] = $idp->authn_context_class_ref;
-  }
+  $settings['idp']['x509certMulti'] = array(
+    'signing' => $idp->x509_certs ?: explode("\n", $idp->x509_cert),
+    'encryption' => $idp->x509_certs,
+  );
 
   // Name to identify IdP
   $settings['idp']['entityId'] = $idp->entity_id;
@@ -393,26 +431,32 @@ function saml_sp__get_settings($idp) {
 
   // add the contact information for the SP
   $contact = variable_get('saml_sp__contact', array());
-  $settings['contactPerson'] = array (
-    'technical' => array (
-        'givenName' => @$contact['technical']['name'],
-        'emailAddress' => @$contact['technical']['email'],
-    ),
-    'support' => array (
-        'givenName' => @$contact['support']['name'],
-        'emailAddress' => @$contact['support']['email'],
-    ),
-  );
+
+  $settings['contactPerson'] = array();
+  if (!empty($contact['technical']['name']) || !empty($contact['technical']['email'])) {
+    $settings['contactPerson']['technical'] = array (
+      'givenName' => $contact['technical']['name'],
+      'emailAddress' => $contact['technical']['email'],
+    );
+  }
+  if (!empty($contact['support']['name']) || !empty($contact['support']['email'])) {
+    $settings['contactPerson']['support'] = array (
+      'givenName' => $contact['support']['name'],
+      'emailAddress' => $contact['support']['email'],
+    );
+  }
 
   // add the organization information
   $organization = variable_get('saml_sp__organization', array());
-  $settings['organization'] = array (
-    'en-US' => array(
-      'name' => @$organization['name'],
-      'displayname' => @$organization['display_name'],
-      'url' => @$organization['url'],
-    ),
-  );
+  if (!empty($organization['name']) || !empty($organization['display_name']) || !empty($organization['url'])) {
+    $settings['organization'] = array (
+      'en-US' => array(
+        'name' => $organization['name'],
+        'displayname' => $organization['display_name'],
+        'url' => $organization['url'],
+      ),
+    );
+  }
 
   // add the security settings
   $security = variable_get('saml_sp__security', array());
@@ -429,6 +473,10 @@ function saml_sp__get_settings($idp) {
     'wantAssertionsSigned'  => (bool) $security['wantAssertionsSigned'],
     'wantNameIdEncrypted'   => (bool) $security['wantNameIdEncrypted'],
   );
+  // The authentication method we want to use with the IdP
+  if ($idp->authn_context_class_ref) {
+    $settings['security']['requestedAuthnContext'] = saml_sp_authn_context_settings($idp->authn_context_class_ref);
+  }
 
   $cert_location = variable_get('saml_sp__cert_location', '');
   if ($cert_location && file_exists($cert_location)) {
@@ -436,7 +484,7 @@ function saml_sp__get_settings($idp) {
   }
 
   // Invoke hook_saml_sp_settings_alter().
-  drupal_alter('saml_sp_settings', $settings);
+  drupal_alter('saml_sp_settings', $settings, $idp);
 
   // we are adding in the private key after the alter function because we don't
   // want to risk the private key getting out and in the hands of a rogue module
@@ -450,7 +498,21 @@ function saml_sp__get_settings($idp) {
   return $settings;
 }
 
-
+/**
+ * generate the setting for authn contexts
+ */
+function saml_sp_authn_context_settings($setting) {
+  $all_contexts = saml_sp_get_authn_contexts();
+  $contexts = explode('|', $setting);
+  foreach ($contexts AS &$value) {
+    foreach ($all_contexts AS $key => $v) {
+      if ($v['id'] == $value) {
+        $value = $key;
+      }
+    }
+  }
+  return $contexts;
+}
 
 /**
  * load the settings and get the metadata
@@ -517,7 +579,7 @@ function saml_sp_start($idp, $callback) {
   }
   else {
     // By default the user is returned to the front page in the same language
-    $return_to = $base_url . '/' . $language->prefix;
+    $return_to = url();
   }
 
   $settings = saml_sp__get_settings($idp);
@@ -540,14 +602,16 @@ function saml_sp_start($idp, $callback) {
  * The function to invoke on completion of a SAML authentication request.
  */
 function saml_sp__track_request($id, $idp, $callback) {
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', __function__ . ' - $idp => <pre>@idp</pre>', array('@idp' => print_r($idp, TRUE)), WATCHDOG_DEBUG);
+  }
   $data = array(
     'id' => $id,
-    'idp' => $idp->machine_name,
+    'idp' => $idp->machine_name ?: variable_get('saml_sp_drupal_login__idp', ''),
     'callback' => $callback,
   );
 
-  $expire = REQUEST_TIME + SAML_SP_REQUEST_CACHE_TIMEOUT;
-  cache_set($id, $data, 'saml_sp_request_tracking_cache', $expire);
+  saml_sp_request_store($id, $data);
 }
 
 /**
@@ -564,8 +628,8 @@ function saml_sp__track_request($id, $idp, $callback) {
  * - callback The function to invoke on authentication.
  */
 function saml_sp__get_tracked_request($id) {
-  if ($cache = cache_get($id, 'saml_sp_request_tracking_cache')) {
-    return $cache->data;
+  if ($data = saml_sp_get_request_store($id)) {
+    return $data;
   }
   return FALSE;
 }
@@ -587,9 +651,9 @@ function _saml_sp__default_idp() {
     'app_name' => NULL,
     'login_url' => '',
     'logout_url' => '',
-    'x509_cert' => '',
+    'x509_certs' => array(),
     'entity_id' => '',
-    'authn_context_class_ref' => 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
+    'authn_context_class_ref' => 'PPT',
   );
 }
 
@@ -677,6 +741,63 @@ function saml_sp_get_authn_contexts() {
     'urn:federation:authentication:windows' => array('id' => 'IWA', 'label' => t('Integrated Windows Authentication')),
     'urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos' => array('id' => 'K', 'label' => t('Kerberos')),
   );
+}
+
+/**
+ * Store and outbount request ID
+ */
+function saml_sp_request_store($id, $data) {
+  $expire = REQUEST_TIME + SAML_SP_REQUEST_STORE_TIMEOUT;
+  if (variable_get('saml_sp__debug', FALSE)) {
+    watchdog('saml_sp', 'Request data: <pre>@request</pre>', array('@request' => print_r($data, TRUE)), WATCHDOG_DEBUG);
+  }
+  return db_insert('saml_sp_requests')
+    ->fields(array(
+      'id' => $id,
+      'data' => serialize($data),
+      'expires' => $expire,
+    ))
+    ->execute();
+}
+
+/**
+ * fetch request data
+ */
+function saml_sp_get_request_store($id) {
+  $request = db_select('saml_sp_requests')
+    ->fields('saml_sp_requests', array('data'))
+    ->condition('id', $id)
+    ->execute()
+    ->fetchObject();
+  $data = FALSE;
+  if (is_object($request) && isset($request->data) && !empty($request->data)) {
+    $data = unserialize($request->data);
+  }
+  if (!isset($data['idp']) || empty($data['idp'])) {
+    $data['idp'] = variable_get('saml_sp_drupal_login__idp', '');
+  }
+  return $data;
+}
+
+/**
+ * clear the stored inbound request ID
+ */
+function saml_sp_clear_request_store($inbound_id) {
+  return db_delete('saml_sp_requests')
+    ->condition('id', $id)
+    ->execute();
+}
+
+/**
+ * Implementa hook_cron().
+ *
+ * Removed expired SAML requests.
+ */
+function saml_sp_cron() {
+  // delete all expired requests
+  db_delete('saml_sp_requests')
+    ->condition('expires', REQUEST_TIME, '<')
+    ->execute();
 }
 
 /**

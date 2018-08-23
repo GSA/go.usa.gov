@@ -24,6 +24,7 @@ function saml_sp__admin_overview() {
  * @ingroup forms
  */
 function saml_sp__configure_idp_form($form, &$form_state, $saml_idp = NULL) {
+  $library = _saml_sp__prepare();
   $show_metadata = TRUE;
   if (is_null($saml_idp)) {
     $show_metadata = FALSE;
@@ -124,42 +125,49 @@ function saml_sp__configure_idp_form($form, &$form_state, $saml_idp = NULL) {
     '#required' => TRUE,
     '#max_length' => 255,
   );
-  $form['idp']['idp_x509_cert'] = array(
+  $form['idp']['idp_x509_certs'] = array(
     '#type' => 'fieldset',
     '#title' => t('x.509 Certificates'),
     '#tree' => TRUE,
     '#description' => t('Enter the application certificate(s) provided by the IdP. When an IdP is switching to a new certificate they will occasionally provide the certificate before hand to those with a Relying Party Trust (RTP). The Certificates listed will be tried in the order they are entered.'),
   );
-  $certs = explode("\n", $saml_idp->x509_cert);
+  $certs = $saml_idp->x509_certs ?: (
+    isset($saml_idp->x509_cert) ?
+      explode("\n", $saml_idp->x509_cert) :
+      array()
+  );
   $count = 0;
   if (!empty($certs)) {
     foreach ($certs AS $encoded_cert) {
       $encoded_cert = trim($encoded_cert);
-      $form['idp']['idp_x509_cert'][$count] = array(
+      $form['idp']['idp_x509_certs'][$count] = array(
         '#type' => 'fieldset',
         '#title' => t('x.509 Certificate @count', array('@count' => $count)),
       );
       if (function_exists('openssl_x509_parse')) {
-        $cert = openssl_x509_parse("-----BEGIN CERTIFICATE-----\n" . $encoded_cert . "\n-----END CERTIFICATE-----");
+        $cert = openssl_x509_parse(OneLogin_Saml2_Utils::formatCert($encoded_cert));
         // flatten the issuer array
-        foreach ($cert['issuer'] AS $key => &$value) {
-          if (is_array($value)) {
-            $value = implode("/", $value);
+        if (!empty($cert['issuer'])) {
+          foreach ($cert['issuer'] AS $key => &$value) {
+            if (is_array($value)) {
+              $value = implode("/", $value);
+            }
           }
         }
+
         if ($cert) {
           $title = t('Name: %cert-name<br/>Issued by: %issuer<br/>Valid: %valid-from - %valid-to', array(
-            '%cert-name' => $cert['name'],
-            '%issuer' => implode('/', $cert['issuer']),
-            '%valid-from' => date('c', $cert['validFrom_time_t']),
-            '%valid-to' => date('c', $cert['validTo_time_t']),
+            '%cert-name' => isset($cert['name']) ? $cert['name'] : '',
+            '%issuer' => isset($cert['issuer']) && is_array($cert['issuer']) ? implode('/', $cert['issuer']) : '',
+            '%valid-from' => isset($cert['validFrom_time_t']) ? date('c', $cert['validFrom_time_t']) : '',
+            '%valid-to' => isset($cert['validTo_time_t']) ? date('c', $cert['validTo_time_t']) : '',
           ));
         }
       }
       if (!isset($title) || empty($title)) {
         $title = t('Certificate');
       }
-      $form['idp']['idp_x509_cert'][$count]['cert'] = array(
+      $form['idp']['idp_x509_certs'][$count]['cert'] = array(
         '#type' => 'textarea',
         '#title' => $title,
         '#description' => t('Enter an application certificate provided by the IdP.'),
@@ -167,26 +175,27 @@ function saml_sp__configure_idp_form($form, &$form_state, $saml_idp = NULL) {
         '#max_length' => 1024,
       );
 
-      $form['idp']['idp_x509_cert'][$count]['details'] = array(
+      $form['idp']['idp_x509_certs'][$count]['details'] = array(
         '#type' => 'fieldset',
         '#collapsible' => TRUE,
         '#collapsed' => TRUE,
         '#title' => t('Details', array('@count' => $count)),
       );
-      $form['idp']['idp_x509_cert'][$count]['details']['markup'] = array(
+      $form['idp']['idp_x509_certs'][$count]['details']['markup'] = array(
         '#markup' => '<pre>' . print_r($cert, TRUE) . '</pre>'
       );
 
       $count++;
     }
-    $form['idp']['idp_x509_cert'][$count]['cert'] = array(
-      '#type' => 'textarea',
-      '#title' => t('x.509 Certificate @count', array('@count' => $count)),
-      '#description' => t('Enter an application certificate provided by the IdP'),
-      '#default_value' => '',
-      '#max_length' => 1024,
-    );
   }
+
+  $form['idp']['idp_x509_certs'][$count]['cert'] = array(
+    '#type' => 'textarea',
+    '#title' => t('x.509 Certificate @count', array('@count' => $count)),
+    '#description' => t('Enter an application certificate provided by the IdP'),
+    '#default_value' => '',
+    '#max_length' => 1024,
+  );
 
   // get the list of supported contexts
   $contexts = saml_sp_get_authn_contexts();
@@ -232,7 +241,7 @@ function saml_sp__configure_idp_form($form, &$form_state, $saml_idp = NULL) {
 function saml_sp__configure_idp_form_submit($form, &$form_state) {
   // handle multiple certs
   $certs = array();
-  foreach ($form_state['values']['idp_x509_cert'] AS $cert) {
+  foreach ($form_state['values']['idp_x509_certs'] AS $cert) {
     if (!empty($cert['cert'])) {
       $certs[] = $cert['cert'];
     }
@@ -258,7 +267,7 @@ function saml_sp__configure_idp_form_submit($form, &$form_state) {
     'nameid_field'            => $form_state['values']['nameid_field'],
     'login_url'               => $form_state['values']['idp_login_url'],
     'logout_url'              => $form_state['values']['idp_logout_url'],
-    'x509_cert'               => implode("\n", $certs),
+    'x509_certs'              => $certs,
     'authn_context_class_ref' => implode('|', $contexts),
     'export_type'             => $form_state['values']['export_type'],
   );
@@ -353,7 +362,7 @@ function saml_sp__export_idp($saml_idp) {
  * configure this SAML Service Provider
  */
 function saml_sp__admin_config($form, &$form_state) {
-
+  $library = _saml_sp__prepare();
   $contact = variable_get('saml_sp__contact', FALSE);
 
   $form['saml_sp__contact'] = array(
@@ -485,11 +494,35 @@ function saml_sp__admin_config($form, &$form_state) {
     '#title'          => t('Sign Meta Data'),
     '#default_value'  => $security ? $security['signMetaData'] : '',
   );
+
+  $suffix ='';
+  if (!empty(variable_get('saml_sp__cert_location', '')) && file_exists(variable_get('saml_sp__cert_location', '')) && function_exists('openssl_x509_parse')) {
+    $encoded_cert = trim(file_get_contents(variable_get('saml_sp__cert_location', '')));
+    $cert = openssl_x509_parse(OneLogin_Saml2_Utils::formatCert($encoded_cert));
+    // flatten the issuer array
+    if (!empty($cert['issuer'])) {
+      foreach ($cert['issuer'] AS $key => &$value) {
+        if (is_array($value)) {
+          $value = implode("/", $value);
+        }
+      }
+    }
+
+    if ($cert) {
+      $suffix = t('Name: %cert-name<br/>Issued by: %issuer<br/>Valid: %valid-from - %valid-to', array(
+        '%cert-name' => isset($cert['name']) ? $cert['name'] : '',
+        '%issuer' => isset($cert['issuer']) && is_array($cert['issuer']) ? implode('/', $cert['issuer']) : '',
+        '%valid-from' => isset($cert['validFrom_time_t']) ? date('c', $cert['validFrom_time_t']) : '',
+        '%valid-to' => isset($cert['validTo_time_t']) ? date('c', $cert['validTo_time_t']) : '',
+      ));
+    }
+  }
   $form['saml_sp__cert_location'] = array(
     '#type'   => 'textfield',
     '#title'  => t('Certificate Location'),
     '#description'  => t('The location of the x.509 certificate file on the server. This must be a location that PHP can read.'),
     '#default_value' => variable_get('saml_sp__cert_location', ''),
+    '#suffix' => $suffix,
   );
 
   $form['saml_sp__key_location'] = array(
@@ -558,7 +591,7 @@ function saml_sp__admin_config($form, &$form_state) {
 
 function saml_sp__admin_config_validate(&$form, &$form_state) {
   // check the saml_sp__sign_metadata status
-  if ($form_state['values']['saml_sp__sign_metadata']) {
+  if (isset($form_state['values']['saml_sp__sign_metadata']) && !empty($form_state['values']['saml_sp__sign_metadata'])) {
     // certificate file
     if (empty($form_state['values']['saml_sp__cert_location'])) {
       form_set_error('saml_sp__cert_location', 'The Certificate Location must be provided.');
