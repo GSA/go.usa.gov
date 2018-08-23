@@ -98,10 +98,11 @@ function saml_sp_schema() {
         'length' => 255,
         'not null' => TRUE,
       ),
-      'x509_cert' => array(
-        'description' => 'The x.509 public certificate of the IDP',
+      'x509_certs' => array(
+        'description' => 'The x.509 public certificates of the IDP',
         'type' => 'text',
         'not null' => TRUE,
+        'serialize' => TRUE,
       ),
       'authn_context_class_ref' => array(
         'description' => 'Preferred authentication method.',
@@ -113,6 +114,31 @@ function saml_sp_schema() {
     ),
     'primary key' => array('machine_name'),
   );
+
+  $schema['saml_sp_requests'] = array(
+    'description' => 'temporary store for SAMl requests',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Request ID',
+        'type' => 'varchar',
+        'length' => '60',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'data' => array(
+        'description' => 'serialized data comtaining the information for the request',
+        'type' => 'blob',
+        'not null' => FALSE,
+      ),
+      'expires' => array(
+        'description' => 'when the data needs to be removed if not done before',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+
 
   return $schema;
 }
@@ -205,4 +231,58 @@ function saml_sp_update_7205() {
   $security = variable_get('saml_sp__security', array());
   variable_set('saml_sp__key_location', $security['saml_sp__key_location']);
   variable_set('saml_sp__cert_location', $security['saml_sp__cert_location']);
+}
+
+/**
+ * Serialize x509 certs.
+ */
+function saml_sp_update_7206() {
+  db_add_field('saml_sp_idps', 'x509_certs', array(
+    'description' => 'The x.509 public certificate of the IDP',
+    'type' => 'text',
+    'not null' => TRUE,
+    'initial' => '',
+    'serialize' => TRUE,
+  ));
+  $idps = db_select('saml_sp_idps', 't')
+    ->fields('t', array('machine_name', 'x509_cert'))
+    ->execute();
+  while ($idp = $idps->fetchAssoc()) {
+    $x509_certs = serialize(array($idp['x509_cert']));
+    db_update('saml_sp_idps')
+      ->fields(array('x509_certs' => $x509_certs))
+      ->condition('machine_name', $idp['machine_name'])
+      ->execute();
+  }
+  db_drop_field('saml_sp_idps', 'x509_cert');
+}
+
+/**
+ * remove saml_sp_request_tracking_cache table
+ */
+function saml_sp_update_7207() {
+  db_drop_table('saml_sp_request_tracking_cache');
+  db_create_table('saml_sp_requests', array(
+    'description' => 'temporary store for SAMl requests',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Request ID',
+        'type' => 'varchar',
+        'length' => '60',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'data' => array(
+        'description' => 'serialized data comtaining the information for the request',
+        'type' => 'blob',
+        'not null' => FALSE,
+      ),
+      'expires' => array(
+        'description' => 'when the data needs to be removed if not done before',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('id'),
+  ));
 }

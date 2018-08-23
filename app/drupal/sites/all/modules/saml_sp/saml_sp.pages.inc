@@ -30,69 +30,61 @@ function saml_sp__endpoint() {
       }
       $idp = saml_sp_idp_load($request['idp']);
       if (variable_get('saml_sp__debug', FALSE)) {
-        watchdog('saml_sp', 'IdP cert(s): <pre>@certs</pre>', array('@certs' => $idp->x509_cert), WATCHDOG_DEBUG);
+        watchdog('saml_sp', 'IdP cert(s): <pre>@certs</pre>', array('@certs' => print_r($idp->x509_certs, TRUE)), WATCHDOG_DEBUG);
       }
-      // explode the certs string
-      $idp_certs = explode("\n", $idp->x509_cert);
+      $idp_certs = $idp->x509_certs;
       if (!empty($idp_certs)) {
-        $is_valid = FALSE;
-        // try each cert
-        foreach ($idp_certs AS $cert) {
-          if ($is_valid) {
-            // we have already validated
-            continue;
-          }
-          // set the cert we are trying
-          $idp->x509_cert = trim($cert);
-          if (variable_get('saml_sp__debug', FALSE)) {
-            watchdog('saml_sp', 'Attempting validation with: $idp => <pre>@idp</pre>', array('@idp' => print_r($idp, TRUE)), WATCHDOG_DEBUG);
-          }
-          $settings = saml_sp__get_settings($idp);
-          // Creating Saml2 Settings object from array
-          $saml_settings = new OneLogin_Saml2_Settings($settings);
-          $saml_response = new OneLogin_Saml2_Response($saml_settings, $_POST['SAMLResponse']);
+        $settings = saml_sp__get_settings($idp);
+        if (variable_get('saml_sp__debug', FALSE)) {
+          watchdog('saml_sp', 'Attempting validation with: $settings => <pre>@settings</pre>', array('@settings' => print_r($settings, TRUE)), WATCHDOG_DEBUG);
+        }
+        // Creating Saml2 Settings object from array
+        $saml_settings = new OneLogin_Saml2_Settings($settings);
+        $saml_response = new OneLogin_Saml2_Response($saml_settings, $_POST['SAMLResponse']);
+        if (empty($saml_response)) {
+          watchdog('saml_sp', 'Response could not be parsed: <pre>%response</pre>', array('%response' => $_POST['SAMLResponse']), WATCHDOG_ERROR);
+        }
 
-          // Try to check the validity of the samlResponse.
-          try {
-            // $saml_response->isValid() will throw various exceptions to communicate
-            // any errors. Sadly, these are all of type Exception - no subclassing.
-            $is_valid = $saml_response->isValid();
-            if (variable_get('saml_sp__debug', FALSE)) {
-              watchdog('saml_sp', 'Certificate worked!: %cert', array('%cert' => $cert), WATCHDOG_DEBUG);
-            }
-          }
-          catch (Exception $e) {
-            // @TODO: inspect the Exceptions, and log a meaningful error condition.
-            watchdog('saml_sp', 'Invalid response, %exception', array('%exception' => $e));
-            $is_valid = FALSE;
-          }
+        // Try to check the validity of the samlResponse.
+        // isValid() will throw various exceptions to communicate errors.
+        // Sadly, these are all caught and it returns only a boolean.
+        $is_valid = $saml_response->isValid();
+        if (variable_get('saml_sp__debug', FALSE) && $is_valid) {
+          watchdog('saml_sp', 'Certificate worked!: %cert', array('%cert' => $cert), WATCHDOG_DEBUG);
         }
       }
       // Remove the now-expired tracked request.
-      cache_clear_all($inbound_id, 'saml_sp_request_tracking_cache');
+      saml_sp_clear_request_store($inbound_id);
 
 
       if (!$is_valid) {
-        $error = $saml_response->getError();
-        list($problem) = array_reverse(explode(' ', $error));
+        try {
+          if ($saml_response) {
+            $error = $saml_response->getError();
+            list($problem) = array_reverse(explode(' ', $error));
 
-        switch ($problem) {
-          case 'Responder':
-            $message = t('There was a problem with the response from @idp_name. Please try again later.', array('@idp_name' => $idp->name));
-            break;
-          case 'Requester':
-            $message = t('There was an issue with the request made to @idp_name. Please try again later.', array('@idp_name' => $idp->name));
-            break;
-          case 'VersionMismatch':
-            $message = t('SAML VersionMismatch between @idp_name and @site_name. Please try again later.', array('@idp_name' => $idp->name, '@site_name' => variable_get('site_name', 'Drupal')));
-            break;
+            switch ($problem) {
+              case 'Responder':
+                $message = t('There was a problem with the response from @idp_name. Please try again later.', array('@idp_name' => $idp->name));
+                break;
+              case 'Requester':
+                $message = t('There was an issue with the request made to @idp_name. Please try again later.', array('@idp_name' => $idp->name));
+                break;
+              case 'VersionMismatch':
+                $message = t('SAML VersionMismatch between @idp_name and @site_name. Please try again later.', array('@idp_name' => $idp->name, '@site_name' => variable_get('site_name', 'Drupal')));
+                break;
+            }
+            if (!empty($message)) {
+              drupal_set_message($message, 'error');
+            }
+            watchdog('saml_sp', 'Invalid response, @error: <pre>@response</pre>', array('@error' => $error, '@response' => print_r($saml_response, TRUE)), WATCHDOG_ERROR);
+          }
         }
-        if (!empty($message)) {
-          drupal_set_message($message, 'error');
+        catch (Exception $e) {
+          drupal_set_message('An unknown error has occurred occurred, the Response was deemed invalid. Please contact a site administrator so they can look in the logs.');
+          watchdog('saml_sp', 'An error occurred, the SAML response was present, but declared invalid with no apparent error. <pre>!saml_response</pre>', array('!saml_response' => print_r($saml_response, TRUE)), WATCHDOG_ERROR);
         }
-        watchdog('saml_sp', 'Invalid response, @error: <pre>@response</pre>', array('@error' => $error, '@response' => print_r($saml_response, TRUE)), WATCHDOG_ERROR);
       }
-
 
       // Invoke the callback function.
       $callback = $request['callback'];

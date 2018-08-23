@@ -4,7 +4,6 @@
  * API hooks for SAML Service Provider module.
  */
 
-
 /**
  * Alter the settings used when generating SAML requests.
  *
@@ -33,7 +32,8 @@ function hook_saml_sp_default_idps() {
   $saml_idp->nameid_field = 'mail';
   $saml_idp->login_url = 'http://example.com/saml/login';
   $saml_idp->logout_url = 'http://example.com/saml/logout';
-  $saml_idp->x509_cert = '-----BEGIN CERTIFICATE-----
+  $saml_idp->x509_certs = array(
+    '-----BEGIN CERTIFICATE-----
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -46,7 +46,8 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx==
------END CERTIFICATE-----';
+-----END CERTIFICATE-----',
+  );
 
   $saml_sp_idps[$saml_idp->machine_name] = $saml_idp;
 

@@ -1,4 +1,4 @@
-SAML Service Provider
+ub php-salSAML Service Provider
 =====================
 
 This package provides two modules:
@@ -23,6 +23,7 @@ Requires the OneLogin SAML-PHP toolkit, downloaded to your 'libraries' folder:
 'cd libraries'
 'git clone https://github.com/onelogin/php-saml.git .'
 
+
 So that the folder structure looks like this when it comes to lib folder
 - libraries
   - php-saml
@@ -33,6 +34,11 @@ So that the folder structure looks like this when it comes to lib folder
         - Auth.php
         ...
 
+NOTE: The PHP-SAML library versions 2.x are not compatible with PHP 7.2+ and
+will throw deprecation warnings for mcrypt functions in PHP 7.1. If you are
+using PHP 7.1+ you can use the PHP-SAML 3.0.0-namespaceless branch from the
+Github repository. The 7.x-2.x version of the saml_sp module will not be
+updated to use the 3.0.0 branch using namespaces.
 
 SimpleSamlPHP Configuration
 ===========================
