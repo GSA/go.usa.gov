@@ -35,6 +35,5 @@ services:
         - MYSQL_PASSWORD=
       volumes:
         - ./data/mysql:/var/lib/mysql:rw
-        #- ./data/docker-entrypoint-initdb.d/go.sql.gz:/docker-entrypoint-initdb.d/go.sql.gz:ro
-        #- ./data/docker-entrypoint-initdb.d/go_metrics.sql.gz:/docker-entrypoint-initdb.d/go_metrics.sql.gz:ro
+        - ./data/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
         - ./docker/mysql/rootfs/etc/mysql/conf.d/my-extras.cnf:/etc/mysql/conf.d/my-extras.cnf:rw
