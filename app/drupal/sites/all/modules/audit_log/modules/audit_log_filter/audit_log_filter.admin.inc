@@ -20,48 +20,71 @@ function audit_log_filter_by_role_form($form, &$form_state) {
 
 /**
  * Render admin form to select entity types and bundles.
+ *
+ * audit_log_exclude_entity_types
+ *
+ * - Entity1
+ * -- Bundle 1
+ * --- View
+ * --- Insert
+ * --- Update
+ * --- Delete
+ * -- Bundle 2
+ * --- View
+ * --- Insert
+ * --- Update
+ * --- Delete
+ * - Entity2
+ * -- Bundle 1
+ * --- View
+ * --- Insert
+ * --- Update
+ * --- Delete
  */
 function audit_log_filter_by_entity_form($form, &$form_state) {
   $entity_info = entity_get_info();
-  $entity_type_options = array();
-  foreach ($entity_info as $entity_type => $info) {
-    $entity_type_options[$entity_type] = $info['label'];
-  }
+  $actions = audit_log_action_options();
+  $form['description'] = array(
+    '#markup' =>  t('Select the Entity Type, Bundle, and/or action you would like to exclude from being logged below.'),
+  );
   $form['audit_log_exclude_entity_types'] = array(
-    '#type' => 'checkboxes',
-    '#title' => t('Exclude entity types'),
-    '#description' => t('Select the entity types which should be excluded from logging'),
-    '#options' => $entity_type_options,
-    '#default_value' => variable_get('audit_log_exclude_entity_types', array()),
+    '#type' => 'container',
+    '#attached' =>  array('js' => array(drupal_get_path('module', 'audit_log_filter') . '/js/entity_filter.js')),
   );
-
-  $form['audit_log_exclude_bundles'] = array(
-    '#type' => 'fieldset',
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-    '#title' => t('Exclude bundles'),
-    '#description' => t('Select the bundles per entity type which should be excluded from logging'),
-  );
-  $excluded_bundles = variable_get('audit_log_exclude_bundles', array());
+  $alf_exclude = variable_get('audit_log_exclude_entity_types', array());
   foreach ($entity_info as $entity_type => $info) {
-    $entity_bundle_options = array();
-    $default_value = array();
-    foreach ($info['bundles'] as $bundle_name => $bundle_info) {
-      $entity_bundle_options[$entity_type . ':' . $bundle_name] = $bundle_info['label'];
-      $default_value[$entity_type . ':' . $bundle_name] = isset($excluded_bundles) && $excluded_bundles[$entity_type . ':' . $bundle_name] ? $entity_type . ':' . $bundle_name : 0;
-    }
-    $form['audit_log_exclude_bundles'][$entity_type] = array(
-      '#type' => 'checkboxes',
-      '#title' => t('Exclude @entity_type bundles', array('@entity_type' => $info['label'])),
-      '#description' => t('Select the @entity_type bundles which should be excluded from logging', array('@entity_type' => $info['label'])),
-      '#options' => $entity_bundle_options,
-      '#states' => array(
-        'visible' => array(
-          ':input[name="audit_log_exclude_entity_types[' . $entity_type . ']"]' => array('checked' => FALSE),
-        ),
-      ),
-      '#default_value' => $default_value,
+    // Selecting this will select all bundles and actions.
+    $form['audit_log_exclude_entity_types'][$entity_type . '-all'] = array(
+      '#type' => 'checkbox',
+      '#title' => t($info['label']),
+      '#default_value' => isset($alf_exclude[$entity_type . '-all']) ? $alf_exclude[$entity_type . '-all'] : FALSE,
     );
+    // This makes the form appear as a "tree" and gives an array structure.
+    $form['audit_log_exclude_entity_types'][$entity_type] = array(
+      '#type' => 'container',
+      '#attributes' => array('style' => 'padding-left:2em;'),
+    );
+    foreach ($info['bundles'] as $bundle_name => $bundle_info) {
+      // Selecting this will select all actions for the bundle.
+      $form['audit_log_exclude_entity_types'][$entity_type][$bundle_name . '-all'] = array(
+        '#type' => 'checkbox',
+        '#title' => t($bundle_info['label']),
+        '#default_value' => isset($alf_exclude[$entity_type][$bundle_name . '-all']) ? $alf_exclude[$entity_type][$bundle_name . '-all'] : FALSE ,
+      );
+      // This makes the actions appear to branch out further than the bundles.
+      // also like above... makes a pretty array.
+      $form['audit_log_exclude_entity_types'][$entity_type][$bundle_name] = array(
+        '#type' => 'container',
+        '#attributes' => array('style' => 'padding-left:2em;'),
+      );
+      foreach ($actions as $action_name => $action_label) {
+      $form['audit_log_exclude_entity_types'][$entity_type][$bundle_name][$action_name] = array(
+          '#type' => 'checkbox',
+          '#title' => t($action_label),
+          '#default_value' => isset($alf_exclude[$entity_type][$bundle_name][$action_name]) ? $alf_exclude[$entity_type][$bundle_name][$action_name] : FALSE,
+        );
+      }
+    }
   }
   $form['#tree'] = TRUE;
   $form['submit'] = array(
@@ -69,19 +92,30 @@ function audit_log_filter_by_entity_form($form, &$form_state) {
     '#value' => t('Save configuration'),
   );
   return $form;
-
 }
 
 /**
  * Form submit callback.
  */
 function audit_log_filter_by_entity_form_submit($form, &$form_state) {
-  variable_set('audit_log_exclude_entity_types', array_filter($form_state['values']['audit_log_exclude_entity_types']));
-  $audit_log_exclude_bundles = array();
-  foreach ($form_state['values']['audit_log_exclude_bundles'] as $values) {
-    $audit_log_exclude_bundles += array_filter($values);
+  $actions = audit_log_action_options();
+  $alf_exclude = &$form_state['values']['audit_log_exclude_entity_types'];
+  $entity_info = entity_get_info();
+  foreach ($entity_info as $entity_type => $info) {
+    foreach ($info['bundles'] as $bundle_name => $bundle_info) {
+      // If the Entity is selected, all bundles will be selected.
+      if (isset($alf_exclude[$entity_type . '-all']) && TRUE == $alf_exclude[$entity_type . '-all']) {
+        $alf_exclude[$entity_type][$bundle_name . '-all'] = TRUE;
+      }
+      foreach ($actions as $action_name => $action_label) {
+        if (isset($alf_exclude[$entity_type][$bundle_name . '-all']) && TRUE == $alf_exclude[$entity_type][$bundle_name . '-all']) {
+          $alf_exclude[$entity_type][$bundle_name][$action_name] = TRUE;
+        }
+      }
+    }
   }
-  variable_set('audit_log_exclude_bundles', $audit_log_exclude_bundles);
+  variable_set('audit_log_exclude_entity_types', $alf_exclude);
+
   drupal_set_message(t('The configuration options have been saved.'));
 }
 

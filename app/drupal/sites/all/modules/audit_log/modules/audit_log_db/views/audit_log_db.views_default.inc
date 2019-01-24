@@ -16,7 +16,7 @@ function audit_log_db_views_default_views() {
   $view->human_name = 'Audit Log';
   $view->core = 7;
   $view->api_version = '3.0';
-  $view->disabled = TRUE; /* Edit this to true to make a default view disabled initially */
+  $view->disabled = FALSE; /* Edit this to true to make a default view disabled initially */
 
   /* Display: Master */
   $handler = $view->new_display('default', 'Master', 'default');
@@ -38,8 +38,9 @@ function audit_log_db_views_default_views() {
     'entity_label' => 'entity_label',
     'entity_type' => 'entity_type',
     'timestamp' => 'timestamp',
+    'message' => 'message',
   );
-  $handler->display->display_options['style_options']['default'] = '-1';
+  $handler->display->display_options['style_options']['default'] = 'timestamp';
   $handler->display->display_options['style_options']['info'] = array(
     'name' => array(
       'sortable' => 1,
@@ -85,6 +86,13 @@ function audit_log_db_views_default_views() {
     ),
     'timestamp' => array(
       'sortable' => 1,
+      'default_sort_order' => 'desc',
+      'align' => '',
+      'separator' => '',
+      'empty_column' => 0,
+    ),
+    'message' => array(
+      'sortable' => 0,
       'default_sort_order' => 'asc',
       'align' => '',
       'separator' => '',
@@ -130,16 +138,14 @@ function audit_log_db_views_default_views() {
   $handler->display->display_options['fields']['timestamp']['field'] = 'timestamp';
   $handler->display->display_options['fields']['timestamp']['date_format'] = 'raw time ago';
   $handler->display->display_options['fields']['timestamp']['second_date_format'] = 'long';
+  /* Field: Audit Log: Message */
+  $handler->display->display_options['fields']['message']['id'] = 'message';
+  $handler->display->display_options['fields']['message']['table'] = 'audit_log';
+  $handler->display->display_options['fields']['message']['field'] = 'message';
   /* Filter criterion: Audit Log: Audit Action */
   $handler->display->display_options['filters']['audit_action']['id'] = 'audit_action';
   $handler->display->display_options['filters']['audit_action']['table'] = 'audit_log';
   $handler->display->display_options['filters']['audit_action']['field'] = 'audit_action';
-  $handler->display->display_options['filters']['audit_action']['value'] = array(
-    'view' => 'view',
-    'insert' => 'insert',
-    'update' => 'update',
-    'delete' => 'delete',
-  );
   $handler->display->display_options['filters']['audit_action']['exposed'] = TRUE;
   $handler->display->display_options['filters']['audit_action']['expose']['operator_id'] = 'audit_action_op';
   $handler->display->display_options['filters']['audit_action']['expose']['label'] = 'Audit Action';
@@ -151,6 +157,10 @@ function audit_log_db_views_default_views() {
     1 => 0,
     3 => 0,
     4 => 0,
+    5 => 0,
+    6 => 0,
+    11 => 0,
+    16 => 0,
   );
   /* Filter criterion: Audit Log: Entity Type */
   $handler->display->display_options['filters']['entity_type']['id'] = 'entity_type';
@@ -188,9 +198,11 @@ function audit_log_db_views_default_views() {
   /* Display: Page */
   $handler = $view->new_display('page', 'Page', 'page');
   $handler->display->display_options['path'] = 'admin/reports/audit';
-  $handler->display->display_options['menu']['type'] = 'tab';
+  $handler->display->display_options['menu']['type'] = 'normal';
   $handler->display->display_options['menu']['title'] = 'Audit Log';
+  $handler->display->display_options['menu']['description'] = 'Show items in Audit log.';
   $handler->display->display_options['menu']['weight'] = '0';
+  $handler->display->display_options['menu']['name'] = 'management';
   $handler->display->display_options['menu']['context'] = 0;
   $handler->display->display_options['menu']['context_only_inline'] = 0;
 

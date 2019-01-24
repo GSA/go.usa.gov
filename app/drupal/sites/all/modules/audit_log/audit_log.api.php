@@ -98,3 +98,10 @@ function hook_audit_log_insert(Auditlog $log) {
   );
   drupal_write_record('log_custom_values', $record);
 }
+
+/**
+ * Returns custom actions.
+ */
+function hook_audit_log_action_options() {
+  return drupal_map_assoc(array('my-action'));
+}

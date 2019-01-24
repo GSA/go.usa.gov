@@ -299,7 +299,7 @@ function shorturl_statistics($for_user = null, $search = null)
         $who      = ($for_user->uid == $user->uid) ? 'Your' : $for_user->name."'s";
     }
 
-    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css', 'module', 'all');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css');
     $output      = '';
     $jsify_table = false;
 
@@ -717,7 +717,7 @@ function shorturl_statistics_link($link)
 
     $key = shorturl_encode_url($link->lid);
     drupal_set_title(t('Link details for !key', array('!key' => _shorturl_remove_https(url($key, array('absolute' => true))))));
-    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css', 'module', 'all');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css');
     $output = '';
 
     $link_user  = user_load($link->uid);
@@ -755,8 +755,8 @@ function shorturl_statistics_link($link)
     $site_root = url('shorturl/', array('absolute' => true));
     //drupal_add_js(  drupal_get_path('module', 'shorturl').'/jquery-1.11.0.min.js' );
     drupal_add_js('var site_root = "'.$site_root.'"; var link_key = "'.$key.'"', 'inline');
-    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl_metrics_table.css', 'module', 'all');
-    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/datepicker_bootstrap.css',   'module', 'all');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl_metrics_table.css');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/datepicker_bootstrap.css');
     drupal_add_js(drupal_get_path('module',  'shorturl').'/js/shorturl_metrics_table.js');
     drupal_add_js(drupal_get_path('module',  'shorturl').'/js/mootools-core.js');
     drupal_add_js(drupal_get_path('module',  'shorturl').'/js/mootools-more.js');
@@ -1240,7 +1240,7 @@ function shorturl_badurl_report($user = null)
         drupal_set_title(is_object($user) ? t("!username's Bad Links", array('!username' => $user->name)) : t('All Bad Links'));
         $access = 'all';
     }
-    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css', 'module', 'all');
+    drupal_add_css(drupal_get_path('module', 'shorturl').'/css/shorturl.css');
     $output = '';
 
     $header = array(

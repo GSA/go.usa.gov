@@ -78,6 +78,11 @@ function audit_log_db_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'message' => array(
+        'description' => 'The message of the log item.',
+        'type' => 'text',
+        'size' => 'big',
+      ),
     ),
     'primary key' => array('id'),
     'indexes' => array(
@@ -130,4 +135,18 @@ function audit_log_db_schema() {
   );
 
   return $schema;
+}
+
+/**
+ * Add message to audit_log table.
+ */
+function audit_log_db_update_7001() {
+  if (!db_field_exists('audit_log', 'message')) {
+    $spec = array(
+      'description' => 'The message of the log item.',
+      'type' => 'text',
+      'size' => 'big',
+    );
+    db_add_field('audit_log', 'message', $spec);
+  }
 }

@@ -103,12 +103,13 @@ function user_restrictions_user_restrictions_info($id, $arg1 = NULL, $arg2 = NUL
           return array('name' => $account->name);
 
         case 'profile':
-          if(isset($arg1['values']['mail'])) {
+          if (isset($arg1['values']['mail'])) {
             return array(
               'mail' => $arg1['values']['mail'],
               'name' => $arg1['values']['name'],
             );
-          } else {
+          }
+          else {
             return array(
             'mail' => $arg1['user']->mail,
             'name' => $arg1['user']->name,

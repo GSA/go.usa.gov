@@ -30,6 +30,10 @@ function saml_sp_init() {
       file_exists(variable_get('saml_sp__cert_location', ''))
   ) {
     $library = _saml_sp__prepare();
+    if ($library['installed'] === FALSE) {
+      // the library isn't installed, so there is no reason to continue
+      return;
+    }
     $encoded_cert = trim(file_get_contents(variable_get('saml_sp__cert_location', '')));
     $cert = openssl_x509_parse(OneLogin_Saml2_Utils::formatCert($encoded_cert));
     $test_time = REQUEST_TIME;
@@ -323,6 +327,29 @@ function saml_sp_libraries_info() {
         'lib/Saml2/Utils.php',
       ),
     ),
+    'versions' => array(
+      '2' => array(),
+      '3' => array(
+        'dependencies' => array(
+          'xmlseclibs'
+        ),
+      ),
+    ),
+  );
+
+  $libraries['xmlseclibs'] = array(
+    'name' => 'XML Security Library (xmlseclibs)',
+    'vendor url' => 'https://github.com/robrichards/xmlseclibs',
+    'download url' => 'https://github.com/robrichards/xmlseclibs/archive/master.zip',
+    'version arguments' => array(
+      'file'    => 'CHANGELOG.txt',
+      'pattern' => '/[0-9?]{2}, [a-zA-Z?]{3} [0-9]{4}, (.*)/',
+    ),
+    'files' => array(
+      'php' => array(
+        'xmlseclibs.php',
+      ),
+    ),
   );
 
   return $libraries;
@@ -339,9 +366,9 @@ function saml_sp_requirements($phase) {
 
     // php-saml library
     $library = libraries_detect('php-saml');
+
     $error_type = isset($library['error']) ? drupal_ucfirst($library['error']) : '';
     $error_message = isset($library['error message']) ? $library['error message'] : '';
-
     if (empty($library['installed'])) {
       $requirements['php_saml_library'] = array(
         'title' => $t('PHP SAML library'),
@@ -352,18 +379,49 @@ function saml_sp_requirements($phase) {
     }
     elseif (version_compare($library['version'], PHP_SAML_LIBRARY_MIN_VERSION, '>=')) {
       $requirements['php_saml_library'] = array(
-        'title' => $t('PHP SAML library'),
+        'title' => $t($library['name']),
         'severity' => REQUIREMENT_OK,
         'value' => $library['version'],
       );
     }
     else {
       $requirements['php_saml_library'] = array(
-        'title' => $t('PHP SAML library'),
-        'value' => $t('At least @a', array('@a' => PHP_SAML_LIBRARY_MIN_VERSION)),
+        'title' => $t($library['name']),
+        'value' => $t('At least @a', array('@a' => 3)),
         'severity' => REQUIREMENT_ERROR,
         'description' => $t('You need to download a later version of the !library and replace the old version (%current_version) located in the %path directory on your server.', array('!library' => l($t('PHP SAML library'), $library['download url']), '%path' => $library['library path'], '%current_version' => $library['version'])),
       );
+    }
+    $php_saml = $library;
+
+    $library = libraries_detect('xmlseclibs');
+    $error_type = isset($library['error']) ? drupal_ucfirst($library['error']) : '';
+    $error_message = isset($library['error message']) ? $library['error message'] : '';
+
+    if (!version_compare($php_saml['version'], 3, '<')) {
+      if (empty($library['installed'])) { // xmlseclibs isn't installed
+        $requirements['xmlseclibs'] = array(
+          'title' => $t($library['name']),
+          'value' => $t('@e: At least @a', array('@e' => $error_type, '@a' => PHP_SAML_LIBRARY_MIN_VERSION)),
+          'severity' => REQUIREMENT_ERROR,
+          'description' => $t('!error You need to download the !library, extract the archive and place the !machine_name directory in the %path directory on your server.', array('!error' => $error_message, '!library' => l($library['name'], $library['download url']), '%path' => 'sites/all/libraries', '!machine_name' => $library['machine name'])),
+        );
+      }
+      elseif (version_compare($library['version'], 3, '>=')) {
+        $requirements['xmlseclibs'] = array(
+          'title' => $t($library['name']),
+          'severity' => REQUIREMENT_OK,
+          'value' => $library['version'],
+        );
+      }
+      else {
+        $requirements['xmlseclibs'] = array(
+          'title' => $t($library['name']),
+          'value' => $t('At least @a', array('@a' => 3)),
+          'severity' => REQUIREMENT_ERROR,
+          'description' => $t('You need to download a later version of the !library and replace the old version (%current_version) located in the %path directory on your server.', array('!library' => l($library['name'], $library['download url']), '%path' => $library['library path'], '%current_version' => $library['version'])),
+        );
+      }
     }
   }
 
@@ -481,6 +539,11 @@ function saml_sp__get_settings($idp) {
   $cert_location = variable_get('saml_sp__cert_location', '');
   if ($cert_location && file_exists($cert_location)) {
     $settings['sp']['x509cert'] = file_get_contents($cert_location);
+  }
+
+  $new_cert_location = variable_get('saml_sp__new_cert_location', '');
+  if ($new_cert_location && file_exists($new_cert_location)) {
+    $settings['sp']['x509certNew'] = file_get_contents($new_cert_location);
   }
 
   // Invoke hook_saml_sp_settings_alter().
@@ -663,7 +726,20 @@ function _saml_sp__default_idp() {
  * this function is a holdover from when the module didn't use libraries
  */
 function _saml_sp__prepare() {
-  return libraries_load('php-saml');
+  $library = libraries_load('php-saml');
+  if ($library['installed'] === FALSE && user_access('configure saml sp')) {
+    drupal_set_message(t('The %library library hasn\'t been installed. Please download it from <a href="!library_url" target="_blank">%library_url</a> and place it in %library_path',
+      array(
+        '%library' => $library['name'],
+        '!library_url' => $library['vendor url'],
+        '%library_url' => $library['vendor url'],
+        '%library_path' => $library['library path'],
+      )),
+      'warning',
+      FALSE
+    );
+  }
+  return $library;
 }
 
 /**
@@ -784,7 +860,7 @@ function saml_sp_get_request_store($id) {
  */
 function saml_sp_clear_request_store($inbound_id) {
   return db_delete('saml_sp_requests')
-    ->condition('id', $id)
+    ->condition('id', $inbound_id)
     ->execute();
 }
 

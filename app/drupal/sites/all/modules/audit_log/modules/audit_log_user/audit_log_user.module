@@ -1,0 +1,131 @@
+<?php
+/**
+ * @file
+ * User related hook implemenations for the Audit log module.
+ */
+
+
+/**
+ * Implements hook_user_login().
+ * Log successful login action of user
+ */
+function audit_log_user_user_login(&$edit, $account) {
+  audit_log($account, 'user', 'user-login', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Log in for @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_user_logout().
+ * Log logout action of user
+ */
+function audit_log_user_user_logout($account) {
+  audit_log($account, 'user', 'user-logout', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Log out for @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ * Adds custom validation to user_login_block form
+ */
+function audit_log_user_form_user_login_block_alter(&$form, &$form_state) {
+  audit_log_user_form_user_login_alter($form, $form_state);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ * Adds custom validation to user_login_form form
+ */
+function audit_log_user_form_user_login_alter(&$form, &$form_state) {
+  $form['#validate'][] = 'audit_log_user_login_validate';
+}
+
+/**
+ * Validate user entered password on login
+ */
+function audit_log_user_login_validate($form, &$form_state) {
+  $uid = _audit_log_user_exists($form_state['values']['name']);
+  if (!$uid) {
+    $anon = user_load(0);
+    $anon->name = $form_state['values']['name'];
+    audit_log($anon, 'user', 'pass-nonuser', $anon, NULL, REQUEST_TIME, array(
+      'message' => format_string('Unexisting user @name.', array('@name' => $anon->name)),
+    ));
+  }
+  elseif (!user_authenticate($form_state['values']['name'], trim($form_state['values']['pass']))) {
+    $anon = user_load(0);
+    $anon->name = $form_state['values']['name'];
+    audit_log($anon, 'user', 'pass-wrong', $anon, NULL, REQUEST_TIME, array(
+      'message' => format_string('Wrong password for @name.', array('@name' => $anon->name)),
+    ));
+  }
+}
+
+/**
+ * Query user table to check if such username is already exists.
+ */
+function _audit_log_user_exists($username) {
+  $q = db_select('users', 'u');
+  $q->addField('u', 'uid');
+  $q->where('LOWER(u.name) = :username', array(':username' => strtolower($username)));
+  return $q->execute()->fetchField();
+}
+
+/**
+ * Implements hook_audit_log_action_options().
+ *
+ * Provide actions related to user actions
+ */
+function audit_log_user_audit_log_action_options() {
+  return drupal_map_assoc(array(
+    'user-login',
+    'user-logout',
+    'pass-nonuser',
+    'pass-wrong',
+    'user-blocked',
+    'user-unblocked',
+    'roles-removed',
+    'roles-added',
+  ));
+}
+
+/**
+ * Implements hook_user_update().
+ */
+function audit_log_user_user_update(&$edit, $account, $category) {
+  // Check if the user was enabled or disabled.
+  if (isset($edit['status'])) {
+    if ($edit['original']->status != $edit['status']) {
+      $action = ($edit['status']) ? 'user-unblocked' : 'user-blocked';
+      audit_log($account, 'user', $action, $account, NULL, REQUEST_TIME, array(
+        'message' => format_string('@action @name.', array(
+          '@name' => $account->name,
+          '@action' => $action,
+        )),
+      ));
+    }
+  }
+
+  // Only run if the submission form in fact sent role info.
+  if (isset($edit['roles']) && is_array($edit['roles'])) {
+
+    // Check if any roles were removed.
+    $removed_roles = array_diff_key($edit['original']->roles, $edit['roles']);
+    if (!empty($removed_roles)) {
+      audit_log($account, 'user', 'roles-removed', $account, NULL, REQUEST_TIME, array(
+        'message' => implode(', ', $removed_roles),
+      ));
+    }
+
+    // Check if any roles were added.
+    $added_keys = array_diff_key($edit['roles'], $edit['original']->roles);
+    if (!empty($added_keys)) {
+      $all_roles = user_roles();
+      $added_roles = array_intersect_key($all_roles, $added_keys);
+      audit_log($account, 'user', 'roles-added', $account, NULL, REQUEST_TIME, array(
+        'message' => implode(', ', $added_roles),
+      ));
+    }
+  }
+}

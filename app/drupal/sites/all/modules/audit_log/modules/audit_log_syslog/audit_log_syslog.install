@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the audit_log_syslog module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function audit_log_syslog_uninstall() {
+  variable_del('audit_log_syslog_identity');
+  variable_del('audit_log_syslog_facility');
+  variable_del('audit_log_syslog_format');
+}

@@ -1,6 +1,6 @@
 <?php
 
-$databases = array (
+$GLOBALS['databases'] = array (
   'default' => array (
     'default' => array (
       'database'  => getenv('RDS_DB_NAME'),
@@ -26,9 +26,8 @@ $databases = array (
     ),
   ),
 );
-$databases['default']['metrics'] =& $databases['metrics']['default'];
+$GLOBALS['databases']['default']['metrics'] =& $databases['metrics']['default'];
 $drupal_hash_salt = getenv('DRUPAL_HASHSALT');
-//$cookie_domain    = '.ctacdev.com';
 
 $update_free_access = FALSE;
 ini_set('session.gc_probability',  1);
@@ -54,6 +53,7 @@ if ( !empty($_SERVER['HTTP_X_FORWARDED_FOR']) && ( !empty($_SERVER['HTTP_X_REAL_
 }
 
 $conf['drupal_http_request_fails'] = FALSE;
+$conf['theme_debug'] = TRUE;
 
 foreach ( $_ENV as $__var=>$__val )
 {

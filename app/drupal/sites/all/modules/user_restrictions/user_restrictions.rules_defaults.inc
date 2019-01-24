@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Default rules configuration for the User restrictions module.
+ */
+
+/**
  * Implements hook_default_rules_configuration().
  *
  * Provides a default rule to email the site email address

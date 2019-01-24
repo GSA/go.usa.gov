@@ -26,10 +26,13 @@ function hook_user_restrictions_alter(&$denied, &$error, &$context) {
 /**
  * Allows modules to give information about the implemented restrictions.
  *
+ * @param $info
+ *   An array containing information about the restrictions implemented by
+ *   modules.
  * @param $context
  *   A string containing the ID of the required information.
  */
-function hook_user_restrictions_info($context) {
+function hook_user_restrictions_info(&$info, &$context) {
 }
 
 /**
@@ -39,7 +42,7 @@ function hook_user_restrictions_info($context) {
  *   An array containing information about the restrictions implemented by
  *   modules.
  * @param $context
- *   An array containing the ID of the required information.
+ *   A string containing the ID of the required information.
  */
 function hook_user_restrictions_info_alter(&$info, &$context) {
 }

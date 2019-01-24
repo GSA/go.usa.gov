@@ -32,14 +32,6 @@ function audit_log_db_views_api() {
 }
 
 /**
- * Helper function.
- */
-function audit_log_db_audit_action_options() {
-  return drupal_map_assoc(array('view', 'insert', 'update', 'delete'));
-}
-
-
-/**
  * Implements hook_permission().
  */
 function audit_log_db_permission() {

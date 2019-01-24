@@ -21,7 +21,7 @@ Drupal module ctools http://drupal.org/project/ctools
 Requires the OneLogin SAML-PHP toolkit, downloaded to your 'libraries' folder:
 
 'cd libraries'
-'git clone https://github.com/onelogin/php-saml.git .'
+'git clone https://github.com/onelogin/php-saml.git'
 
 
 So that the folder structure looks like this when it comes to lib folder

@@ -5,9 +5,8 @@ core = 7.x
 
 files[] = includes/AuditLog.php
 
-; Information added by Drupal.org packaging script on 2015-08-18
-version = "7.x-1.2"
+; Information added by Drupal.org packaging script on 2018-10-01
+version = "7.x-1.3"
 core = "7.x"
 project = "audit_log"
-datestamp = "1439909305"
-
+datestamp = "1538386087"

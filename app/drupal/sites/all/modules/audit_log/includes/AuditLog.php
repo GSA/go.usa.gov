@@ -81,6 +81,15 @@ class Auditlog {
   public $timestamp;
 
   /**
+   * Message.
+   *
+   * A message describing the log item.
+   *
+   * @var string
+   */
+  public $message;
+
+  /**
    * Create an audit log.
    *
    * @param array $values
@@ -105,6 +114,7 @@ class Auditlog {
    *       defaults to request_path()).
    *     - timestamp: The timestamp when the action was performed (optional,
    *       defaults to REQUEST_TIME).
+   *     - message: Message describing the log item (optional).
    */
   public function __construct($values = array()) {
     if (!isset($values['uid'])) {
@@ -112,7 +122,7 @@ class Auditlog {
       $values = array(
         'uid' => $user->uid,
         'role_ids' => array_keys($user->roles),
-        'name' => $user->name,
+        'name' => user_is_anonymous() ? variable_get('anonymous', t('Anonymous')) : $user->name,
       ) + $values;
     }
     if (!isset($values['name'])) {

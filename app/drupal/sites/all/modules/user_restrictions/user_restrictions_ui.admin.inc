@@ -128,10 +128,10 @@ function user_restrictions_ui_edit_rule_form_submit($form, &$form_state) {
   $rule->type = $form_state['values']['type'];
   $rule->mask = $form_state['values']['mask'];
   if ($form_state['values']['expire'] != -1) {
-    $rule->expire = $rule->expire ?  $rule->expire + REQUEST_TIME : 0;
+    $rule->expire = $form_state['values']['expire'] ? $form_state['values']['expire'] + REQUEST_TIME : 0;
   }
   $rule->save();
-  
+
   drupal_set_message(t('The access rule has been saved.'));
 }
 
@@ -196,6 +196,124 @@ function user_restrictions_ui_overview_form($form, &$form_state) {
 }
 
 /**
+ * Form builder to import access rules from the D6 access table.
+ *
+ * @see user_restrictions_ui_import_rule_form_submit()
+ * @ingroup forms
+ */
+function user_restrictions_ui_import_rule_form($form, &$form_state) {
+  $form = array();
+
+  if (db_table_exists('access')) {
+    $count = db_query("SELECT COUNT(DISTINCT aid) FROM {access} WHERE type <> 'host'")->fetchField();
+  }
+
+  if (isset($count) && $count > 0) {
+    $form['access_import'] = array(
+      '#type' => 'submit',
+      '#value' => t('Import'),
+    );
+    $instructions = t(':count items to be imported', array(':count' => $count));
+  }
+  else {
+    $instructions = t('No Access Rules to import');
+  }
+
+  $form['import_help'] = array(
+    '#type' => 'item',
+    '#markup' => $instructions,
+    '#weight' => -10,
+  );
+
+  return $form;
+}
+
+/**
+ * Form submission function.
+ *
+ * @see user_restrictions_ui_import_rule_form()
+ * @ingroup forms
+ */
+function user_restrictions_ui_import_rule_form_submit($form, &$form_state) {
+  $batch = array(
+    'title' => t('Importing'),
+    'operations' => array(
+      array('user_restrictions_ui_import', array()),
+    ),
+    'file' => drupal_get_path('module', 'user_restrictions_ui') . '/user_restrictions_ui.admin.inc',
+    'finished' => 'user_restrictions_ui_import_finished',
+  );
+  batch_set($batch);
+
+}
+
+/**
+ * Batch import function to import access rules from the access table
+ *
+ * @see user_restrictions_ui_import_rule_form_submit()
+ * @param $context
+ */
+function user_restrictions_ui_import(&$context) {
+  if (empty($context['sandbox']) && db_table_exists('access')) {
+    $context['sandbox'] = array();
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_aid'] = 0;
+    $context['sandbox']['max'] = db_query("SELECT COUNT(DISTINCT aid) FROM {access} WHERE type <> 'host'")->fetchField();
+  }
+
+  $limit = 10;
+  if (!empty($context['sandbox']['max'])) {
+    $rules = db_select('access', 'a')
+      ->fields('a')
+      ->condition('aid', $context['sandbox']['current_aid'], '>')
+      ->condition('type', 'host', '!=')
+      ->orderBy('aid', 'ASC')
+      ->range(0, $limit)
+      ->execute();
+    foreach ($rules as $rule) {
+      // Access rules uses 'user' whilst user_restrictions uses 'name'
+      $rule->type = $rule->type == 'user' ? 'name' : $rule->type;
+      db_merge('user_restrictions')
+        ->key(array(
+          'type' => $rule->type,
+          'mask' => $rule->mask,
+          'status' => $rule->status,
+        ))
+        ->fields(array('status' => $rule->status))
+        ->execute();
+      $context['results'][] = check_plain($rule->mask);
+      $context['sandbox']['progress']++;
+      $context['sandbox']['current_aid'] = $rule->aid;
+    }
+  }
+  $context['finished'] = (
+    empty($context['sandbox']['max']) ? 1 : ($context['sandbox']['progress'] / $context['sandbox']['max'])
+  );
+
+}
+
+/**
+ * Batch finished function.
+ *
+ * @see user_restrictions_ui_import_rule_form_submit()
+ * @param $success
+ * @param $results
+ * @param $operations
+ */
+function user_restrictions_ui_import_finished($success, $results, $operations) {
+  if ($success) {
+    $message = format_plural(count($results), 'One record imported.', '@count records imported.');
+    $status = 'status';
+  }
+  else {
+    $message = t('Error while importing.');
+    $status = 'error';
+  }
+
+  drupal_set_message($message, $status);
+}
+
+/**
  * Form validation handler for user_restrictions_ui_overview_form().
  *
  * @see user_restrictions_ui_overview_form()
@@ -204,7 +322,7 @@ function user_restrictions_ui_overview_form($form, &$form_state) {
 function user_restrictions_ui_check_email_validate($form, &$form_state) {
   if (empty($form_state['values']['value'])
       || !valid_email_address($form_state['values']['value'])) {
-    form_set_error('value',t('The entered value is not a valid email address.'));
+    form_set_error('value', t('The entered value is not a valid email address.'));
   }
 }
 
@@ -217,7 +335,7 @@ function user_restrictions_ui_check_email_validate($form, &$form_state) {
 function user_restrictions_ui_check_email_submit($form, &$form_state) {
   $error = UserRestrictions::check($form_state, 'check_mail');
   if ($error['message'] != '') {
-    drupal_set_message($error['message']);
+    drupal_set_message($error['message'], 'warning');
   }
   else {
     drupal_set_message(
@@ -234,7 +352,7 @@ function user_restrictions_ui_check_email_submit($form, &$form_state) {
 function user_restrictions_ui_check_username_submit($form, &$form_state) {
   $error = UserRestrictions::check($form_state, 'check_name');
   if ($error['message'] != '') {
-    drupal_set_message($error['message']);
+    drupal_set_message($error['message'], 'warning');
   }
   else {
     drupal_set_message(

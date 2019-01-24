@@ -495,34 +495,12 @@ function saml_sp__admin_config($form, &$form_state) {
     '#default_value'  => $security ? $security['signMetaData'] : '',
   );
 
-  $suffix ='';
-  if (!empty(variable_get('saml_sp__cert_location', '')) && file_exists(variable_get('saml_sp__cert_location', '')) && function_exists('openssl_x509_parse')) {
-    $encoded_cert = trim(file_get_contents(variable_get('saml_sp__cert_location', '')));
-    $cert = openssl_x509_parse(OneLogin_Saml2_Utils::formatCert($encoded_cert));
-    // flatten the issuer array
-    if (!empty($cert['issuer'])) {
-      foreach ($cert['issuer'] AS $key => &$value) {
-        if (is_array($value)) {
-          $value = implode("/", $value);
-        }
-      }
-    }
-
-    if ($cert) {
-      $suffix = t('Name: %cert-name<br/>Issued by: %issuer<br/>Valid: %valid-from - %valid-to', array(
-        '%cert-name' => isset($cert['name']) ? $cert['name'] : '',
-        '%issuer' => isset($cert['issuer']) && is_array($cert['issuer']) ? implode('/', $cert['issuer']) : '',
-        '%valid-from' => isset($cert['validFrom_time_t']) ? date('c', $cert['validFrom_time_t']) : '',
-        '%valid-to' => isset($cert['validTo_time_t']) ? date('c', $cert['validTo_time_t']) : '',
-      ));
-    }
-  }
   $form['saml_sp__cert_location'] = array(
     '#type'   => 'textfield',
     '#title'  => t('Certificate Location'),
     '#description'  => t('The location of the x.509 certificate file on the server. This must be a location that PHP can read.'),
     '#default_value' => variable_get('saml_sp__cert_location', ''),
-    '#suffix' => $suffix,
+    '#suffix' => saml_sp_get_cert_info(variable_get('saml_sp__cert_location', '')),
   );
 
   $form['saml_sp__key_location'] = array(
@@ -530,6 +508,14 @@ function saml_sp__admin_config($form, &$form_state) {
     '#title'  => t('Key Location'),
     '#description'  => t('The location of the x.509 key file on the server. This must be a location that PHP can read.'),
     '#default_value' => variable_get('saml_sp__key_location', ''),
+  );
+
+  $form['saml_sp__new_cert_location'] = array(
+    '#type'   => 'textfield',
+    '#title'  => t('New Cert Location'),
+    '#description'  => t('The location of the x.509 certificate file on the server. If the certificate above is about to expire add your new certificate here after you have obtained it. This will add the new certificate to the metadata to let the IdP know of the new certificate. This must be a location that PHP can read.'),
+    '#default_value' => variable_get('saml_sp__new_cert_location', ''),
+    '#suffix' => saml_sp_get_cert_info(variable_get('saml_sp__new_cert_location', '')),
   );
   $error = FALSE;
   try {
@@ -589,6 +575,36 @@ function saml_sp__admin_config($form, &$form_state) {
   return system_settings_form($form);
 }
 
+/**
+ * with the certificate location retrieve pertinant certificate data and output
+ * in a string for display
+ */
+function saml_sp_get_cert_info($cert_location) {
+  if (!empty($cert_location) && file_exists($cert_location) && function_exists('openssl_x509_parse')) {
+    $encoded_cert = trim(file_get_contents($cert_location));
+    $cert = openssl_x509_parse(OneLogin_Saml2_Utils::formatCert($encoded_cert));
+    // flatten the issuer array
+    if (!empty($cert['issuer'])) {
+      foreach ($cert['issuer'] AS $key => &$value) {
+        if (is_array($value)) {
+          $value = implode("/", $value);
+        }
+      }
+    }
+
+    if ($cert) {
+      $info = t('Name: %cert-name<br/>Issued by: %issuer<br/>Valid: %valid-from - %valid-to', array(
+        '%cert-name' => isset($cert['name']) ? $cert['name'] : '',
+        '%issuer' => isset($cert['issuer']) && is_array($cert['issuer']) ? implode('/', $cert['issuer']) : '',
+        '%valid-from' => isset($cert['validFrom_time_t']) ? date('c', $cert['validFrom_time_t']) : '',
+        '%valid-to' => isset($cert['validTo_time_t']) ? date('c', $cert['validTo_time_t']) : '',
+      ));
+      return $info;
+    }
+  }
+
+  return FALSE;
+}
 function saml_sp__admin_config_validate(&$form, &$form_state) {
   // check the saml_sp__sign_metadata status
   if (isset($form_state['values']['saml_sp__sign_metadata']) && !empty($form_state['values']['saml_sp__sign_metadata'])) {

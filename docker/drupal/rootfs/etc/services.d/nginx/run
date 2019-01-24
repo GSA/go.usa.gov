@@ -1,0 +1,3 @@
+#!/usr/bin/with-contenv sh
+
+exec nginx -c /etc/nginx/nginx.conf -g "error_log /proc/self/fd/2 error;"

@@ -1,15 +1,22 @@
-version: '2'
+version: '3'
 services:
     web:
       build:
         dockerfile: docker/drupal/Dockerfile
         context: .
+        args:
+          PHP_VERSION: 7.3
+          DRUPAL_VERSION: 7.63
       ports:
         - 80:80
         - 443:443
       volumes:
-        - ./app/drupal/sites:/var/www/html/sites:rw
-        - ./docker/drupal/rootfs/etc/nginx/nginx-dev.conf:/etc/nginx/nginx.conf:rw
+        - ./app/drupal/sites/default/settings.php:/var/www/html/sites/default/settings.php
+        - ./app/drupal/sites/all/libraries:/var/www/html/sites/all/libraries
+        - ./app/drupal/sites/all/modules:/var/www/html/sites/all/modules
+        - ./app/drupal/sites/all/themes:/var/www/html/sites/all/themes
+        # - ./app/drupal/misc:/var/www/html/misc
+        - ./app/drupal/status.php:/var/www/html/status.php
       env_file:
         - dev.env
         #- prod.env

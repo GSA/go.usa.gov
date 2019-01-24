@@ -1,0 +1,2 @@
+/tmp                                    true root     1777 1777
+/var/www/html/                          true www-data 1775 1775

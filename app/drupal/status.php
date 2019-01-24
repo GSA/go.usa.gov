@@ -1,4 +1,5 @@
 <?php
+
 $t = array( 'start'=>microtime(true), 'bootstrap'=>null, 'fin'=>null );
 
 
@@ -11,12 +12,13 @@ $t = array( 'start'=>microtime(true), 'bootstrap'=>null, 'fin'=>null );
 // such as those registered by the devel.module for statistics.
 register_shutdown_function('status_shutdown');
 function status_shutdown() {
-  global $t;
+  global $t, $config, $databases;
   $t['fin'] = microtime(true);
   if ( !empty($_GET['timers']) )
   {
     echo " start({$t['start']}) bootstrap({$t['bootstrap']}) fin({$t['fin']})";
   }
+
   exit();
 }
 
@@ -31,8 +33,6 @@ $errors = array();
 define('DRUPAL_ROOT', getcwd());
 // Drupal bootstrap.
 require_once './includes/bootstrap.inc';
-
-
 try {
     drupal_bootstrap(DRUPAL_BOOTSTRAP_VARIABLES);
 }

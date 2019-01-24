@@ -381,9 +381,11 @@ function saml_sp_user_logout($account) {
   watchdog('saml_sp', 'Session closed for %name (%uid) and starting SAML SLO.', array('%name' => $account->name, '%uid' => $account->uid));
   // Force redirection in drupal_goto().
   unset($_GET['destination']);
-  if(!empty($saml_request)) {
-    // Destroy session before doing redirect.
-    session_destroy();
+  if (!empty($saml_request)) {
+    if (session_status() == PHP_SESSION_ACTIVE) {
+      // Destroy session before doing redirect.
+      session_destroy();
+    }
     drupal_goto($url);
   }
 }

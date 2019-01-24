@@ -1,4 +1,0 @@
-;FPM OVERRIDE
-
-[PHP]
-auto_prepend_file=/etc/php/env.php

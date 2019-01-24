@@ -1,0 +1,13 @@
+name = Audit log HybridAuth
+description = Provides HybridAuth actions
+package = Audit log
+core = 7.x
+
+dependencies[] = audit_log
+dependencies[] = hybridauth
+
+; Information added by Drupal.org packaging script on 2018-10-01
+version = "7.x-1.3"
+core = "7.x"
+project = "audit_log"
+datestamp = "1538386087"

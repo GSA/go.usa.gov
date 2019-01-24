@@ -1,0 +1,75 @@
+<?php
+/**
+ * @file
+ * HybridAuth related hook implemenations for the Audit log module.
+ */
+
+/**
+ * Implements hook_hybridauth_user_insert().
+ *
+ * Write a watchdog log entry when HybridAuth causes user creation.
+ */
+function audit_log_hybridauth_hybridauth_user_insert($account, $data) {
+  audit_log($account, 'user', 'hybridauth-user-created', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Created @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_hybridauth_identity_added().
+ *
+ * Write a watchdog log entry when a HybridAuth identity is added to a user.
+ */
+function audit_log_hybridauth_hybridauth_identity_added($account, $data) {
+  audit_log($account, 'user', 'hybridauth-user-identity-added', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Added identity to @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_hybridauth_identity_deleted().
+ *
+ * Write a watchdog log entry when a HybridAuth identity is deleted from a user.
+ */
+function audit_log_hybridauth_hybridauth_identity_deleted($account, $data) {
+  audit_log($account, 'user', 'hybridauth-user-identity-deleted', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Deleted identity from @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_hybridauth_user_login().
+ *
+ * Write a watchdog log entry when a user logs in via HybridAuth.
+ */
+function audit_log_hybridauth_hybridauth_user_login($account, $data) {
+  audit_log($account, 'user', 'hybridauth-user-login', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Login for @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_hybridauth_user_blocked().
+ *
+ * Write a watchdog log entry when a user fails to log in via HybridAuth.
+ */
+function audit_log_hybridauth_hybridauth_user_blocked($account, $data) {
+  audit_log($account, 'user', 'hybridauth-user-blocked', $account, NULL, REQUEST_TIME, array(
+    'message' => format_string('Login rejected for @name.', array('@name' => $account->name)),
+  ));
+}
+
+/**
+ * Implements hook_audit_log_action_options().
+ *
+ * Provide actions related to user actions
+ */
+function audit_log_hybridauth_audit_log_action_options() {
+  return drupal_map_assoc(array(
+    'hybridauth-user-created',
+    'hybridauth-user-identity-added',
+    'hybridauth-user-identity-deleted',
+    'hybridauth-user-login',
+    'hybridauth-user-blocked',
+  ));
+}

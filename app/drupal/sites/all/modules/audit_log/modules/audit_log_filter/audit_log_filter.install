@@ -10,5 +10,36 @@
 function audit_log_filter_uninstall() {
   variable_del('audit_log_filter_exclude_roles');
   variable_del('audit_log_exclude_enity_types');
+}
+
+/**
+ * Update filters.
+ */
+function audit_log_filter_update_7001() {
+  $alf_old_bundles = variable_get('audit_log_exclude_bundles', array());
+  $alf_old_entities = variable_get('audit_log_exclude_entity_types', array());
+  $alf_exclude = array();
+  $entity_info = entity_get_info();
+  foreach ($alf_old_entities as $entity_type => $value) {
+    if (!empty($value)) {
+      $alf_exclude[$entity_type . '-all'] = TRUE;
+    }
+  }
+  foreach ($alf_old_bundles as $info => $value) {
+    $keys = explode(':', $info);
+    $entity_type = $keys[0];
+    $bundle_name = $keys[1];
+    if (!isset($alf_exclude[$entity_type])) {
+      $alf_exclude[$entity_type] = array();
+    }
+    $alf_exclude[$entity_type][$bundle_name . '-all'] = TRUE;
+  }
+  module_load_include('inc', 'audit_log_filter', 'audit_log_filter.admin');
+  $form_state = array(
+    'values' => array(
+      'audit_log_exclude_entity_types' => $alf_exclude,
+    ),
+  );
+  audit_log_filter_by_entity_form_submit(array(), $form_state);
   variable_del('audit_log_exclude_bundles');
 }

@@ -65,5 +65,14 @@ function user_restrictions_ui_menu() {
     'file' => 'user_restrictions_ui.admin.inc',
   );
 
+  $items['admin/config/people/user-restrictions/import'] = array(
+    'title' => 'Import rules',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('user_restrictions_ui_import_rule_form'),
+    'access arguments' => $edit_restrictions,
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'user_restrictions_ui.admin.inc',
+  );
+
   return $items;
 }

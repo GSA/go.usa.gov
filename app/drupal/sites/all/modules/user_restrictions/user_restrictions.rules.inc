@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Rules_info for the User restrictions module.
+ */
+
+/**
  * Implements hook_rules_event_info
  *
  * Whenever a user is denied registration or login this rules event
@@ -21,8 +26,8 @@ function user_restrictions_rules_event_info() {
       'module' => 'user_restrictions',
       'variables' => array(
         'type' => array('type' => 'text', 'label' => t('Type of User Restrictions match.')),
-        'mask' => array('type' => 'text',	'label' => t('Mask blocked by User Restrictions.')),
-        'form_type' => array('type' => 'text',	'label' => t('Which form the denial occured on.')),
+        'mask' => array('type' => 'text',  'label' => t('Mask blocked by User Restrictions.')),
+        'form_type' => array('type' => 'text',  'label' => t('Which form the denial occured on.')),
       ),
     ),
   );

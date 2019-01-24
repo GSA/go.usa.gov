@@ -50,7 +50,8 @@ function errorlog_watchdog($log) {
 
     // Send themed alert to the web server's log.
     if (drupal_get_bootstrap_phase() >= DRUPAL_BOOTSTRAP_FULL) {
-      $message = theme('errorlog_format', $log);
+      // $message = theme('errorlog_format', $log);
+      $message = theme_errorlog_format($log);
     }
     // On earlier bootstrap stages not all theme functions are available.
     else {

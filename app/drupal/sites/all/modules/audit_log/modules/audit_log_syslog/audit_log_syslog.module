@@ -1,0 +1,79 @@
+<?php
+/**
+ * @file
+ * Hook implementation for the Audit syslog logging module.
+ */
+
+/**
+ * Implements hook_audit_log().
+ */
+function audit_log_syslog_audit_log(Auditlog $log) {
+  global $base_url;
+
+  $log_init = &drupal_static(__FUNCTION__, FALSE);
+
+  if (!$log_init) {
+    $log_init = TRUE;
+    $default_facility = defined('LOG_LOCAL0') ? LOG_LOCAL0 : LOG_USER;
+    openlog(variable_get('audit_log_syslog_identity', variable_get('syslog_identity', 'drupal')), LOG_NDELAY, variable_get('audit_log_syslog_facility', variable_get('syslog_facility', $default_facility)));
+  }
+
+  $message = strtr(variable_get('audit_log_syslog_format', variable_get('syslog_format', '!base_url|!timestamp|!type|!ip|!request_uri|!referer|!uid|!link|!message')), array(
+    '!base_url'     => $base_url,
+    '!ip'           => ip_address(),
+    '!timestamp'    => $log->timestamp,
+    '!type'         => $log->audit_action,
+    '!request_uri'  => $base_url . '/' . $log->url,
+    '!referer'      => $base_url . '/' . $log->url,
+    '!link'         => $base_url . '/' . $log->url,
+    '!uid'          => $log->uid,
+    '!entity_id'    => $log->entity_id,
+    '!entity_type'  => $log->entity_type,
+    '!entity_label' => $log->entity_label,
+    '!bundle'       => $log->bundle,
+    '!audit_action' => $log->audit_action,
+    '!message'      => isset($log->message) ? $log->message : '',
+  ));
+
+  syslog(variable_get('audit_log_syslog_log_severity', WATCHDOG_NOTICE), $message);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function audit_log_syslog_permission() {
+  return array(
+    'audit_log_syslog_admin' => array(
+      'title' => t('Administer audit log syslog'),
+      'description' => t('Perform administration tasks for audit log syslog.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function audit_log_syslog_menu() {
+  $items = array();
+
+  $items['admin/config/system/audit-log'] = array(
+    'title' => 'Audit log settings',
+    'description' => 'Audit log settings',
+    'page callback' => 'system_admin_menu_block_page',
+    'access arguments' => array('audit_log_syslog_admin'),
+    'type' => MENU_NORMAL_ITEM,
+    'file path' => drupal_get_path('module', 'system'),
+    'file' => 'system.admin.inc',
+  );
+
+  $items['admin/config/system/audit-log/syslog'] = array(
+    'title' => 'Configure syslog',
+    'description' => 'Configure syslog',
+    'access arguments' => array('audit_log_syslog_admin'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_log_syslog_settings'),
+    'file' => 'audit_log_syslog.admin.inc',
+  );
+
+  return $items;
+}

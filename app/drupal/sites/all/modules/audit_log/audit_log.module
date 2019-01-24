@@ -22,13 +22,15 @@ define('AUDIT_LOG_DO_NOT_LOG', 'do not log');
  *   The url on which the action was performed.
  * @param int $timestamp
  *   The timestamp when the action was performed.
+ * @param array $params
+ *   Optional array to pass extra parameters.
  *
  * @see hook_audit_log_alter()
  * @see hook_audit_log()
  * @see AuditLog::log()
  * @see hook_audit_log_insert()
  */
-function audit_log($entity, $entity_type, $action = 'view', $account = NULL, $url = NULL, $timestamp = REQUEST_TIME) {
+function audit_log($entity, $entity_type, $action = 'view', $account = NULL, $url = NULL, $timestamp = REQUEST_TIME, $params = array()) {
   list($id, , $bundle) = entity_extract_ids($entity_type, $entity);
   if (!$account) {
     global $user;
@@ -47,6 +49,12 @@ function audit_log($entity, $entity_type, $action = 'view', $account = NULL, $ur
     'timestamp' => $timestamp,
     'audit_action' => $action,
   );
+
+  if (isset($params) && is_array($params)) {
+    foreach ($params as $property => $param) {
+      $values[$property] = $param;
+    }
+  }
 
   $log = new Auditlog(array_filter($values));
   $context = array(
@@ -102,4 +110,21 @@ function audit_log_entity_update($entity, $entity_type) {
  */
 function audit_log_entity_delete($entity, $entity_type) {
   audit_log($entity, $entity_type, 'delete');
+}
+
+/**
+ * Helper function to get all possible audit actions.
+ */
+function audit_log_action_options() {
+  $actions = module_invoke_all('audit_log_action_options');
+  return $actions;
+}
+
+/**
+ * Implements hook_audit_log_action_options().
+ *
+ * Provide actions implemented by default.
+ */
+function audit_log_audit_log_action_options() {
+  return drupal_map_assoc(array('view', 'insert', 'update', 'delete'), 'ucwords');
 }

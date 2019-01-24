@@ -11,12 +11,6 @@ function audit_log_filter_audit_log_it(Auditlog $log, array $context, $account) 
   if (count(array_intersect($log->role_ids, variable_get('audit_log_filter_exclude_roles', array())))) {
     return AUDIT_LOG_DO_NOT_LOG;
   }
-  if (in_array($log->entity_type, variable_get('audit_log_exclude_entity_types', array()))) {
-    return AUDIT_LOG_DO_NOT_LOG;
-  }
-  if (in_array($log->entity_type . ':' . $log->bundle, variable_get('audit_log_exclude_bundles', array()))) {
-    return AUDIT_LOG_DO_NOT_LOG;
-  }
   if (drupal_is_cli()) {
     if (variable_get('audit_log_exclude_cli', FALSE)) {
       return AUDIT_LOG_DO_NOT_LOG;
@@ -24,6 +18,16 @@ function audit_log_filter_audit_log_it(Auditlog $log, array $context, $account) 
     if (function_exists('drush_main') && variable_get('audit_log_exclude_drush', FALSE)) {
       return AUDIT_LOG_DO_NOT_LOG;
     }
+  }
+  $alf_exclude = variable_get('audit_log_exclude_entity_types', array());
+  if (isset($alf_exclude[$log->entity_type . '-all']) && TRUE == $alf_exclude[$log->entity_type . '-all']) {
+    return AUDIT_LOG_DO_NOT_LOG;
+  }
+  if (isset($alf_exclude[$log->entity_type][$log->bundle . '-all']) && TRUE == $alf_exclude[$log->entity_type][$log->bundle . '-all']) {
+    return AUDIT_LOG_DO_NOT_LOG;
+  }
+  if (isset($alf_exclude[$log->entity_type][$log->bundle][$log->audit_action]) && TRUE == $alf_exclude[$log->entity_type][$log->bundle][$log->audit_action]) {
+    return AUDIT_LOG_DO_NOT_LOG;
   }
   return AUDIT_LOG_DO_LOG;
 }
