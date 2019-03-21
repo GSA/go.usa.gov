@@ -549,7 +549,7 @@ function advuser_build_filter_query($reset = FALSE) {
           $account->uid = 'advuser_filter';
           $account->roles = array(DRUPAL_AUTHENTICATED_RID => 1);
           if (user_access($value, $account)) {
-            continue;
+            continue 2;
           }
         } break;
         case 'created':
