@@ -4,3 +4,4 @@ prod.env
 data/*
 data/mysql/*
 data/docker-entrypoint-initdb.d/*
+jmeter.log

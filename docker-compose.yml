@@ -1,12 +1,12 @@
 version: '3'
 services:
-    web:
+    drupal:
       build:
-        dockerfile: docker/drupal/Dockerfile
+        dockerfile: docker/drupal/Dockerfile-16
         context: .
         args:
           PHP_VERSION: 7.3
-          DRUPAL_VERSION: 7.63
+          DRUPAL_VERSION: 7.66
       ports:
         - 80:80
         - 443:443
