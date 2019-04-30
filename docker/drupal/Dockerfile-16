@@ -5,15 +5,26 @@ ARG PHP_VERSION
 ENV PHP_VERSION ${PHP_VERSION:-7.3}
 
 ARG DRUPAL_VERSION
-ENV DRUPAL_VERSION ${DRUPAL_VERSION:-7.65}
+ENV DRUPAL_VERSION ${DRUPAL_VERSION:-7.66}
 
 ARG S6_VERSION
-ENV S6_VERSION ${S6_VERSION:-1.21.7.0}
+ENV S6_VERSION ${S6_VERSION:-1.22.1.0}
+
+############ UBUNTU #############################################################
+
+#ENV LANGUAGE    en_US.UTF-8
+#ENV LANG        en_US.UTF-8
+#ENV LC_ALL      en_US.UTF-8
+#ENV LC_MESSAGES en_US.UTF-8
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         software-properties-common unattended-upgrades curl git vim \
+    #locales \
+    #&& locale-gen en_US.UTF-8 \
+    #&& localedef -i en_US -f UTF-8 en_US.UTF-8 \
     && unattended-upgrade -d \
+    ############ PHP / NGINX #############################################################
     && LC_ALL=C.UTF-8 add-apt-repository ppa:ondrej/php \
     && curl http://nginx.org/keys/nginx_signing.key -o /tmp/nginx_signing.key \
     && apt-key add /tmp/nginx_signing.key \
@@ -63,17 +74,12 @@ RUN apt-get update \
     && curl -sS https://getcomposer.org/installer | php \
     && mv composer.phar /usr/local/bin/composer \
     && chmod a+x /usr/local/bin/composer \
-    && composer global require drush/drush:~8.1 \
-    && composer global update --no-plugins --no-scripts \
-    && ln -s /root/.composer/vendor/bin/drush /usr/local/bin/drush \
-    && chmod a+x /usr/local/bin/drush /root/.composer/vendor/bin/drush \
-    && drush dl -y drupal-${DRUPAL_VERSION}\
-        --destination=/var/www --drupal-project-rename=html \
     && mkdir -p -m 664 \
         /var/log/nginx \
         /var/log/php \
         /var/lib/php/sessions \
         /var/www/ \
+        /var/www/html \
     && chown -R www-data:www-data \
         /var/log/nginx \
         /var/log/php \
@@ -86,17 +92,29 @@ RUN apt-get update \
     && ln -sf /dev/stdout /var/log/php/fpm_slow.log \
     && ln -sf /dev/stdout /var/log/php-fpm.log \
     && cd /tmp \
-    && curl -L -s https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-amd64.tar.gz \
-    | tar xvzf - -C /
+    && curl -L -s https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-amd64.tar.gz | tar xvzf - -C / \
+    ############ DRUPAL #############################################################
+    && composer global require drush/drush:~8.1 \
+    && composer global update --no-plugins --no-scripts \
+    && ln -s /root/.composer/vendor/bin/drush /usr/local/bin/drush \
+    && chmod a+x /usr/local/bin/drush /root/.composer/vendor/bin/drush \
+    && drush dl -y drupal-${DRUPAL_VERSION} \
+        --destination=/var/www --drupal-project-rename=html \
+    && chown -R www-data:www-data \
+        /var/www \
+    && chmod g+x \
+       /var/www \
+       /var/www/html
 
 COPY docker/drupal/rootfs/ /
+RUN cp -R /etc/php/all/* /etc/php/${PHP_VERSION}/
+
+############ APPLICATION #############################################################
+
 COPY app/drupal/sites /var/www/html/sites
 COPY app/drupal/misc  /var/www/html/misc
 COPY app/drupal/status.php  /var/www/html/status.php
-
-RUN cp -R /etc/php/all/* /etc/php/${PHP_VERSION}/
-
-
+    
 WORKDIR /var/www/html
 EXPOSE 80 443
 

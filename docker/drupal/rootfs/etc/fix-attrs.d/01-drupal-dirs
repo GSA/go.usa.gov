@@ -1,2 +1,3 @@
-/tmp                                    true root     1777 1777
-/var/www/html/                          true www-data 1775 1775
+/tmp                                    true  root     1777 1777
+/var/www                                false www-data 1775 1775
+/var/www/html                           true  www-data 1775 1775

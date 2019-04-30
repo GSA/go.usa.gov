@@ -11,12 +11,12 @@ services:
         - 80:80
         - 443:443
       volumes:
-        - ./app/drupal/sites/default/settings.php:/var/www/html/sites/default/settings.php
-        - ./app/drupal/sites/all/libraries:/var/www/html/sites/all/libraries
-        - ./app/drupal/sites/all/modules:/var/www/html/sites/all/modules
-        - ./app/drupal/sites/all/themes:/var/www/html/sites/all/themes
-        # - ./app/drupal/misc:/var/www/html/misc
-        - ./app/drupal/status.php:/var/www/html/status.php
+        - ./app/drupal/sites/default/settings.php:/var/www/html/sites/default/settings.php:rw
+        - ./app/drupal/sites/all/libraries:/var/www/html/sites/all/libraries:rw
+        - ./app/drupal/sites/all/modules:/var/www/html/sites/all/modules:rw
+        - ./app/drupal/sites/all/themes:/var/www/html/sites/all/themes:rw
+        - ./app/drupal/misc/favicon.ico:/var/www/html/misc/favicon.ico
+        - ./app/drupal/status.php:/var/www/html/status.php:rw
       env_file:
         - dev.env
         #- prod.env

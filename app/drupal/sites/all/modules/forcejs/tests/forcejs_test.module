@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Support module for ForceJs testing.
+ */
+
+/**
+ * Implements hook_page_build().
+ */
+function forcejs_test_page_build(&$page) {
+  global $user;
+  drupal_add_http_header('X-Test-Uid', $user->uid);
+  if (isset($_COOKIE['has_js'])) {
+    drupal_add_http_header('X-Test-Has-Js', $_COOKIE['has_js']);
+  }
+}

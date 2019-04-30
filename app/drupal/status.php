@@ -1,5 +1,11 @@
 <?php
 
+error_reporting(E_ALL);
+ini_set('display_errors',1);
+set_error_handler(NULL);
+set_exception_handler(NULL);
+
+
 $t = array( 'start'=>microtime(true), 'bootstrap'=>null, 'fin'=>null );
 
 
@@ -27,14 +33,14 @@ if ( !empty($_GET['phponly']) )
     exit();
 }
 
-
 // Build up our list of errors.
 $errors = array();
 define('DRUPAL_ROOT', getcwd());
 // Drupal bootstrap.
 require_once './includes/bootstrap.inc';
 try {
-    drupal_bootstrap(DRUPAL_BOOTSTRAP_VARIABLES);
+    drupal_bootstrap(DRUPAL_BOOTSTRAP_CONFIGURATION);
+    // drupal_bootstrap(DRUPAL_BOOTSTRAP_VARIABLES);
 }
 catch (Exception $e) {
     $errors[]= $e->getMessage();
@@ -60,4 +66,3 @@ else {
 
 // Exit immediately, note the shutdown function registered at the top of the file.
 exit();
-

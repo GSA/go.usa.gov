@@ -1,6 +1,6 @@
 <?php
 
-$GLOBALS['databases'] = array (
+$databases = array (
   'default' => array (
     'default' => array (
       'database'  => getenv('RDS_DB_NAME'),
@@ -26,8 +26,9 @@ $GLOBALS['databases'] = array (
     ),
   ),
 );
-$GLOBALS['databases']['default']['metrics'] =& $databases['metrics']['default'];
+// $databases['default']['metrics'] =& $databases['metrics']['default'];
 $drupal_hash_salt = getenv('DRUPAL_HASHSALT');
+//$cookie_domain    = '.ctacdev.com';
 
 $update_free_access = FALSE;
 ini_set('session.gc_probability',  1);
@@ -53,14 +54,13 @@ if ( !empty($_SERVER['HTTP_X_FORWARDED_FOR']) && ( !empty($_SERVER['HTTP_X_REAL_
 }
 
 $conf['drupal_http_request_fails'] = FALSE;
-$conf['theme_debug'] = TRUE;
 
-foreach ( $_ENV as $__var=>$__val )
-{
-    if ( strlen($__var)>7 && strtolower(substr($__var,0,7)) === 'drupal_' )
-    {
-        $conf[strtolower(substr($__var,7))] = $__val;
-    }
-}
-unset($__var);
-unset($__val);
+// foreach ( $_ENV as $__var=>$__val )
+// {
+//     if ( strlen($__var)>7 && strtolower(substr($__var,0,7)) === 'drupal_' )
+//     {
+//         $conf[strtolower(substr($__var,7))] = $__val;
+//     }
+// }
+// unset($__var);
+// unset($__val);

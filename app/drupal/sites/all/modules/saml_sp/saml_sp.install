@@ -12,10 +12,6 @@
 function saml_sp_schema() {
   $schema = array();
 
-  // Cache all outbound SAML SP requests.
-  $schema['saml_sp_request_tracking_cache'] = drupal_get_schema_unprocessed('system', 'cache');
-
-
   // Store the IDP data.
   $schema['saml_sp_idps'] = array(
     'description' => 'IDPs registered with SAML Service Provider.',
@@ -285,4 +281,14 @@ function saml_sp_update_7207() {
     ),
     'primary key' => array('id'),
   ));
+}
+
+/**
+ * check to see if saml_sp_request_tracking_cache table exists, if so remove
+ * it as it was finally removed from the schema
+ */
+function saml_sp_update_7208() {
+  if (db_table_exists('saml_sp_request_tracking_cache')) {
+    db_drop_table('saml_sp_request_tracking_cache');
+  }
 }

@@ -1,0 +1,51 @@
+<?php
+/**
+ * @file
+ * Removes the has_js cookie.
+ */
+
+/**
+ * Implements hook_boot().
+ */
+function forcejs_boot() {
+  if ((string) variable_get('force_js') === '1') {
+    $_COOKIE['has_js'] = '1';
+  }
+  elseif(!isset($_COOKIE[session_name()])) {
+    unset($_COOKIE['has_js']);
+  }
+}
+
+/**
+ * Implements hook_js_alter().
+ */
+function forcejs_js_alter(&$javascript) {
+  $remove = (string) variable_get('force_js') === '1' || !isset($_COOKIE[session_name()]);
+  if ($remove && isset($javascript['misc/drupal.js'])) {
+    $forcejs = drupal_get_path('module', 'forcejs') . '/forcejs.js';
+    $javascript[$forcejs] = $javascript['misc/drupal.js'];
+    $javascript[$forcejs]['data'] = $forcejs;
+    $javascript[$forcejs]['weight']++;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function forcejs_form_system_performance_settings_alter(&$form, &$form_state) {
+  $form['force_js'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('JavaScript cookie'),
+  );
+
+  $form['force_js']['force_js'] = array(
+    '#type' => 'radios',
+    '#title' => t('Enforce cookie value'),
+    '#default_value' => variable_get('force_js', 'unset'),
+    '#options' => array(
+      'unset' => t('Remove for users without an open session'),
+      '1' => t('Remove for all users but pretend its presence'),
+    ),
+    '#description' => t('Choose the conditions under which the <code>has_js</code> cookie is removed. If advanced page level caching affecting users with an open session is in place (e.g., Authcache or ESI), cookie removal must be performed for all users.'),
+  );
+}
