@@ -6,7 +6,7 @@ services:
         context: .
         args:
           PHP_VERSION: 7.3
-          DRUPAL_VERSION: 7.66
+          DRUPAL_VERSION: 7.67
       ports:
         - 80:80
         - 443:443
