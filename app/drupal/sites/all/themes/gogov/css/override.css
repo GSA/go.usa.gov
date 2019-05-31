@@ -1,6 +1,17 @@
 .wspace {
     clear:both;
-    padding-top: 15px;
+    padding-top: 0px;
+}
+
+html{
+  font-size:100%;
+  font-family: "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+}
+
+body{
+  font-size: 1rem;
+  background:#fff;
+  font-family:"Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
 }
 
 #header h1 a {
@@ -10,7 +21,57 @@
     width: 100%;
     height: 88px;
     text-indent: -9999px;
-    background: url(../images/goUSA-logo.png) no-repeat left top;
+    background: url(https://go.usa.gov/sites/all/themes/gogov/images/goUSA-logo.png) no-repeat left top;
+}
+
+h2, h3, h4 {
+    font-family: "Merriweather", "Cambria", "Times New Roman", "Times", serif;
+}
+h2{
+  font-size: 180%;
+  font-weight: 700;
+  color:#c61f0c;
+}
+
+h2 a{
+    text-decoration: none;
+}
+
+.otp {
+  color:#000;
+  font-size: 120%;
+  font-weight: 700;
+  font-family: "Merriweather", "Cambria", "Times New Roman", "Times", serif;
+}
+h3{
+  font-size:160%;
+  color: #154285;
+  font-weight:700;
+}
+
+h4{
+    font-size:110%;
+    color: #000;
+    font-weight:700;
+  }
+
+a:link, a:visited {
+    color: #154285;
+    font-size: 100%;
+}
+
+.node.node-blog.node-promoted.node-teaser.clearfix h2 a, a:visited {
+    color: #154285;
+    font-size: 90%;
+}
+
+.node.node-blog.node-promoted.node-teaser.clearfix h2 a:hover {
+    text-decoration: underline;
+}
+.main-menu .content ul li a {
+    color: #fff;
+    font-size: 1rem;
+    font-family: "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
 }
 .region-pre-content-area #block-shorten-shorten, .region-pre-content-area #block-user-login {
     -webkit-border-radius: 1em;
@@ -24,27 +85,59 @@
     clear: both;
     width: 100%;
     background-color: #02bfe7;
-    color: #212121;
+    color: #000;
 }
+
+.region-pre-content-area #block-shorten-shorten label,
+.region-pre-content-area #block-user-login label{
+  font-size:1em;
+}
+
 .region-pre-content-area #block-user-login h2 {
-    color: #212121;
+    color: #000;
     display: inherit;
-    font-size: 1.5em;
+    font-size: 160%;
     margin: 0 0 18px 0;
     padding: 0;
+    font-family: "Merriweather", "Georgia", "Cambria", "Times New Roman", "Times", serif;
+    font-weight: 700;
 }
 .region-pre-content-area #block-user-login .item-list ul li a {
-    color: #212121;
+    color: #000;
 }
 
 .marker, .form-required {
-    color: #212121;
+    color: #154285;
 }
 
 .main-menu .content ul {
-    padding: 0 0 0 85px;
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
 }
 
+thead th {
+    background: #c3d9ff;
+    font-size: 160%;
+    font-weight: 700;
+    color: #154285;
+    font-family: "Merriweather", "Cambria", "Times New Roman", "Times", serif;
+}
+
+table thead th {
+    color: #154285;
+}
+
+.shorturl thead th {
+    font-size: 160%;
+}
+#shorturl-statistics .link {
+    font-size: 1rem;
+}
+#shorturl-statistics .count {
+    font-size: 1rem;
+    line-height: 110%;
+}
 #footer .poweredby {
     clear: both;
     width: auto;
@@ -85,7 +178,7 @@
     background-color: #16375b;
     border-color: #16375b;
     color: #fff;
-    font-size: 1.5em;
+    font-size: 1rem;
     text-align: center;
     float: left;
 }
@@ -94,4 +187,24 @@ form label span.marker,
 form label span.form-required
 {
     color: #000;
+}
+@media (max-width: 768px) {
+.region-pre-content-area #block-user-login h2 {
+    font-size: 200%;
+}
+
+h2 {
+  font-size: 200%;
+}
+}
+
+
+@media (max-width: 480px){
+.region-pre-content-area #block-user-login h2 {
+    font-size: 300%;
+}
+
+h2 {
+  font-size: 300%;
+}
 }

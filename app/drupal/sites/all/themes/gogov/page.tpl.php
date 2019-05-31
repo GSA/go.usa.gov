@@ -75,6 +75,7 @@
 
   <div id="page-wrapper">
     <div id="header">
+      <a name="primary"></a>
       <div class="main-menu">
         <div class="content">
           <?php $hmm = menu_tree('main-menu'); print drupal_render($hmm); ?>
