@@ -5,6 +5,7 @@ version = VERSION
 core = 7.x
 
 stylesheets[all][] = css/style.css
+stylesheets[all][] = css/override.css
 
 scripts[] = js/global.js
 
