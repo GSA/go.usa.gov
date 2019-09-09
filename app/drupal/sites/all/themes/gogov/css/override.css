@@ -4,14 +4,14 @@
 }
 
 html{
-  font-size:100%;
-  font-family: "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+    font-size:100%;
+    font-family: "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
 }
 
 body{
-  font-size: 1rem;
-  background:#fff;
-  font-family:"Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+    font-size: 1rem;
+    background:#fff;
+    font-family:"Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
 }
 
 #header h1 a {
@@ -28,9 +28,9 @@ h2, h3, h4 {
     font-family: "Merriweather", "Cambria", "Times New Roman", "Times", serif;
 }
 h2{
-  font-size: 180%;
-  font-weight: 700;
-  color:#c61f0c;
+    font-size: 180%;
+    font-weight: 700;
+    color:#c61f0c;
 }
 
 h2 a{
@@ -38,22 +38,22 @@ h2 a{
 }
 
 .otp {
-  color:#000;
-  font-size: 120%;
-  font-weight: 700;
-  font-family: "Merriweather", "Cambria", "Times New Roman", "Times", serif;
+    color:#000;
+    font-size: 120%;
+    font-weight: 700;
+    font-family: "Merriweather", "Cambria", "Times New Roman", "Times", serif;
 }
 h3{
-  font-size:160%;
-  color: #154285;
-  font-weight:700;
+    font-size:160%;
+    color: #154285;
+    font-weight:700;
 }
 
 h4{
     font-size:110%;
     color: #000;
     font-weight:700;
-  }
+}
 
 a:link, a:visited {
     color: #154285;
@@ -90,7 +90,7 @@ a:link, a:visited {
 
 .region-pre-content-area #block-shorten-shorten label,
 .region-pre-content-area #block-user-login label{
-  font-size:1em;
+    font-size:1em;
 }
 
 .region-pre-content-area #block-user-login h2 {
@@ -189,22 +189,22 @@ form label span.form-required
     color: #000;
 }
 @media (max-width: 768px) {
-.region-pre-content-area #block-user-login h2 {
-    font-size: 200%;
-}
+    .region-pre-content-area #block-user-login h2 {
+        font-size: 200%;
+    }
 
-h2 {
-  font-size: 200%;
-}
+    h2 {
+        font-size: 200%;
+    }
 }
 
 
 @media (max-width: 480px){
-.region-pre-content-area #block-user-login h2 {
-    font-size: 300%;
-}
+    .region-pre-content-area #block-user-login h2 {
+        font-size: 300%;
+    }
 
-h2 {
-  font-size: 300%;
-}
+    h2 {
+        font-size: 300%;
+    }
 }
