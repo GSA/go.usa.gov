@@ -140,6 +140,8 @@ $.widget( "ui.autocomplete", {
 				}
 			},
 			keypress: function( event ) {
+				// JKH
+				console.log('keypress');
 				if ( suppressKeyPress ) {
 					suppressKeyPress = false;
 					event.preventDefault();

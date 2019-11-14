@@ -10,6 +10,10 @@ services:
       ports:
         - 80:80
         - 443:443
+      networks:
+        default:
+          aliases:
+            - go.usa.loc        
       volumes:
         - ./app/drupal/sites/default/settings.php:/var/www/html/sites/default/settings.php:rw
         - ./app/drupal/sites/all/libraries:/var/www/html/sites/all/libraries:rw
@@ -28,6 +32,10 @@ services:
       #command: mysqld --skip-grant-tables
       ports:
         - 3306:3306
+      networks:
+        default:
+          aliases:
+            - go.db.loc         
       environment:
         - MYSQL_DATABASE=go
         - MYSQL_ALLOW_EMPTY_PASSWORD=1
