@@ -1353,7 +1353,7 @@ function shorturl_badurl_report($user = null)
 function shorturl_parse_url($url, $strict = false)
 {
     $strict_url = "/^(?:(?P<scheme>[^\:\/\?\#]+):\/\/)?(?:(?P<userinfo>(?:(?:[\w\.\-\+!$&'\(\)*\+,;=]|%[0-9a-f]{2})+:)*(?:[\w\.\-\+%!$&'\(\)*\+,;=]|%[0-9a-f]{2})+)@)?(?P<host>(?:[a-z0-9\-\.\_\~]|%[0-9a-f]{2})+)?(?::(?P<port>[0-9]+))?(?P<tail>[\/\?#](?:[\w#!:\.\?\+=&@$'~*,;\/\(\)\[\]\-]|%[0-9a-f]{2})*)?$/xi";
-    $simple_url = "/^(?:(?P<scheme>[^\:\/\?\#]+):\/\/)?(?:(?P<userinfo>[^\/@]*)@)?(?P<host>[^\/:?#]*)?(?::(?P<port>[0-9]+))?(?P<tail>(?P<path>[^\?\#]*?(?:\.(?P<format>[^\.\?\#]*))?)?(?:\?(?P<query>[^\#]*))?(?:#(?P<fragment>.*))?)?$/i";
+    $simple_url = "/^(?:(?P<scheme>[^\:\/\?\#]+):\/\/)?(?:(?P<userinfo>[^\/@]*)@)?(?P<host>[^\/\\\:?#]*)?(?::(?P<port>[0-9]+))?(?P<tail>(?P<path>[^\?\#]*?(?:\.(?P<format>[^\.\?\#]*))?)?(?:\?(?P<query>[^\#]*))?(?:#(?P<fragment>.*))?)?$/i";
 
     $parsed = array(
         'valid'    => false,
