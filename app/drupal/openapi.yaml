@@ -1,0 +1,101 @@
+openapi: 3.0.0
+info:
+  version: "1"
+  title: go.USA.gov API
+  description: Go.USA.gov is a URL shortener for government employees. The API can shorten, preview, and show clicks on short URLs.
+paths:
+  '/shorten{response_format}':
+    get:
+      summary: Shortening a URL
+      parameters:
+        -  $ref: '#/components/parameters/response_format'
+        -  name: longURL
+           in: query
+           description: The encoded long URL that you wish to shorten
+           required: true
+           schema: 
+              type: string
+      responses:
+        '200':
+          description: OK. Returns the new short URL and the long URL.
+        '202':
+          description: Please provide a longUrl
+
+  '/expand{response_format}':
+    get:
+      summary: Preview the Destination of a Short URL
+      parameters:
+        -  $ref: '#/components/parameters/response_format'
+        -  name: shortUrl
+           in: query
+           description: The encoded shortened URL
+           required: true
+           schema: 
+              type: string
+      responses:
+        '200':
+          description: OK. Returns the short URL and the long URL.
+        '205':
+          description: Please provide a shortUrl.
+  '/clicks{response_format}':
+    get:
+      summary: Get the Number of Clicks on a Short URL
+      parameters:
+        -  $ref: '#/components/parameters/response_format'
+        -  name: shortUrl
+           in: query
+           description: The encoded shortened URL
+           required: true
+           schema: 
+              type: string
+      responses:
+        '200':
+          description: OK. Returns the short URL and the number of clicks on the short URL.
+        '205':
+          description: Please provide a shortUrl.
+  '/export{response_format}':
+    get:
+      summary: Get a List of All Short URLs
+      parameters:
+        -  $ref: '#/components/parameters/response_format'
+        -  name: type
+           in: query
+           description: This parameter should be empty
+           required: true
+           schema: 
+              type: string
+      responses:
+        '200':
+          description: OK. Returns a list of the short URLs created with the account associated with the API key used, including details about each URL.
+
+
+servers:
+  - url: 'https://api.gsa.gov/technology/go-usa-gov/v1'
+components:
+          
+  parameters:
+    response_format:
+      name: response_format
+      in: path
+      description: The format of the response from this API
+      schema:
+        type: string
+        enum:
+          - ".json"
+          - ".jsonp"
+          - ".xml"
+          - ".txt"
+      required: true
+  securitySchemes:
+    ApiKeyAuth:        # arbitrary name for the security scheme
+      type: apiKey
+      in: query       # can be "header", "query" or "cookie"
+      name: apiKey  # name of the header, query parameter or cookie
+    LoginAuth:        # arbitrary name for the security scheme
+      type: apiKey
+      in: query       # can be "header", "query" or "cookie"
+      name: login  # name of the header, query parameter or cookie
+security:
+  - ApiKeyAuth: []
+    LoginAuth: []
+  
