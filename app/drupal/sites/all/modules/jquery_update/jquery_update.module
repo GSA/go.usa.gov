@@ -217,7 +217,7 @@ function jquery_update_get_versions() {
       '2.1', '2.2',
 
       // 3.x. JKH note added 3.4
-      '3.1', '3.4',
+      '3.1', '3.4','3.5',
     )));
   }
   // tracetofile(__FILE__,__LINE__,'versions');
@@ -319,6 +319,10 @@ function jquery_update_jquery_replace(&$javascript, $cdn, $path, $min, $version)
     case '3.4':
       $trueversion = '3.4.1';
       break;
+
+   case '3.5':
+      $trueversion = '3.5.1';
+      break; 
   }
   $javascript['jquery']['version'] = $trueversion;
 
