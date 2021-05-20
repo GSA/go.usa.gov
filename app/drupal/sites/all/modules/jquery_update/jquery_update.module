@@ -669,7 +669,8 @@ function jquery_update_jqueryui_cdn($cdn, &$javascript, $path, $min, $names) {
 function jquery_update_jqueryui_local(&$javascript, $path, $min, $names) {
 
   // Construct the jQuery UI path and replace the JavaScript.
-  $jspath = $path . '/replace/ui/ui/' . ($min == '.min' ? 'minified/' : '');
+  //$jspath = $path . '/replace/ui/ui/' . ($min == '.min' ? 'minified/' : '');
+  $jspath = $path . '/replace/ui/ui/' . ($min == '.min' ? '/' : '');
   foreach ($names as $name => $file) {
     list($file_core, $file_updated) = is_array($file) ? $file : array($file, $file);
     $corefile = 'misc/ui/jquery.' . $file_core . '.min.js';
