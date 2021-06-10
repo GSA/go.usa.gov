@@ -489,7 +489,7 @@ function jquery_update_jqueryui_replace(&$javascript, $cdn, $path, $min) {
   $javascript['ui.menu'] = array(
     'title' => 'jQuery UI: Menu',
     'website' => 'http://jqueryui.com/demos/menu/',
-    'version' => '1.10.2',
+    'version' => '1.12.1',
     'js' => array('misc/ui/jquery.ui.menu.min.js' => array()),
     'css' => array('misc/ui/jquery.ui.menu.css' => array()),
     'dependencies' => array(array('system', 'ui.widget'), array('system', 'ui.position')),
@@ -497,7 +497,7 @@ function jquery_update_jqueryui_replace(&$javascript, $cdn, $path, $min) {
   $javascript['ui.spinner'] = array(
     'title' => 'jQuery UI: Spinner',
     'website' => 'http://jqueryui.com/demos/spinner/',
-    'version' => '1.10.2',
+    'version' => '1.12.1',
     'js' => array('misc/ui/jquery.ui.spinner.min.js' => array()),
     'css' => array('misc/ui/jquery.ui.spinner.css' => array()),
     'dependencies' => array(array('system', 'ui.widget'), array('system', 'ui.button')),
@@ -505,7 +505,7 @@ function jquery_update_jqueryui_replace(&$javascript, $cdn, $path, $min) {
   $javascript['ui.tooltip'] = array(
     'title' => 'jQuery UI: Spinner',
     'website' => 'http://jqueryui.com/demos/tooltip/',
-    'version' => '1.10.2',
+    'version' => '1.12.1',
     'js' => array('misc/ui/jquery.ui.tooltip.min.js' => array()),
     'css' => array('misc/ui/jquery.ui.tooltip.css' => array()),
     'dependencies' => array(array('system', 'ui.widget'), array('system', 'ui.position')),
@@ -539,19 +539,19 @@ function jquery_update_jqueryui_replace(&$javascript, $cdn, $path, $min) {
 
   switch ($cdn) {
     case 'google':
-      $cdn = '//ajax.googleapis.com/ajax/libs/jqueryui/1.10.2/jquery-ui' . $min . '.js';
+      $cdn = '//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui' . $min . '.js';
       jquery_update_jqueryui_cdn($cdn, $javascript, $path, $min, $names);
       jquery_update_jqueryui_backup($javascript, $path, $min);
       break;
 
     case 'microsoft':
-      $cdn = '//ajax.aspnetcdn.com/ajax/jquery.ui/1.10.2/jquery-ui' . $min . '.js';
+      $cdn = '//ajax.aspnetcdn.com/ajax/jquery.ui/1.12.1/jquery-ui' . $min . '.js';
       jquery_update_jqueryui_cdn($cdn, $javascript, $path, $min, $names);
       jquery_update_jqueryui_backup($javascript, $path, $min);
       break;
 
     case 'jquery':
-      $cdn = '//code.jquery.com/ui/1.10.2/jquery-ui' . $min . '.js';
+      $cdn = '//code.jquery.com/ui/1.12.1/jquery-ui' . $min . '.js';
       jquery_update_jqueryui_cdn($cdn, $javascript, $path, $min, $names);
       jquery_update_jqueryui_backup($javascript, $path, $min);
       break;
@@ -634,7 +634,7 @@ function jquery_update_jqueryui_cdn($cdn, &$javascript, $path, $min, $names) {
     $corefile = 'misc/ui/jquery.' . $file_core . '.min.js';
     // Remove the core files.
     unset($javascript[$name]['js'][$corefile]);
-    $javascript[$name]['version'] = '1.10.2';
+    $javascript[$name]['version'] = '1.12.1';
   }
 
   // UI is used by all of UI. Add the js cdn here.
@@ -670,10 +670,11 @@ function jquery_update_jqueryui_local(&$javascript, $path, $min, $names) {
 
   // Construct the jQuery UI path and replace the JavaScript.
   $jspath = $path . '/replace/ui/ui/' . ($min == '.min' ? 'minified/' : '');
+  //$jspath = $path . '/replace/ui/ui/' . ($min == '.min' ? '' : '');
   foreach ($names as $name => $file) {
     list($file_core, $file_updated) = is_array($file) ? $file : array($file, $file);
     $corefile = 'misc/ui/jquery.' . $file_core . '.min.js';
     $javascript[$name]['js'][$corefile]['data'] = $jspath . 'jquery.' . $file_updated . $min . '.js';
-    $javascript[$name]['version'] = '1.10.2';
+    $javascript[$name]['version'] = '1.12.1';
   }
 }

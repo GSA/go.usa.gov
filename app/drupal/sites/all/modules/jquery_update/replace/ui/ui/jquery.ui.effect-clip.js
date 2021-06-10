@@ -1,67 +1,65 @@
 /*!
- * jQuery UI Effects Clip 1.10.2
+ * jQuery UI Effects Clip @VERSION
  * http://jqueryui.com
  *
- * Copyright 2013 jQuery Foundation and other contributors
+ * Copyright jQuery Foundation and other contributors
  * Released under the MIT license.
  * http://jquery.org/license
- *
- * http://api.jqueryui.com/clip-effect/
- *
- * Depends:
- *	jquery.ui.effect.js
  */
-(function( $, undefined ) {
 
-$.effects.effect.clip = function( o, done ) {
-	// Create element
-	var el = $( this ),
-		props = [ "position", "top", "bottom", "left", "right", "height", "width" ],
-		mode = $.effects.setMode( el, o.mode || "hide" ),
-		show = mode === "show",
-		direction = o.direction || "vertical",
-		vert = direction === "vertical",
-		size = vert ? "height" : "width",
-		position = vert ? "top" : "left",
-		animation = {},
-		wrapper, animate, distance;
+//>>label: Clip Effect
+//>>group: Effects
+//>>description: Clips the element on and off like an old TV.
+//>>docs: http://api.jqueryui.com/clip-effect/
+//>>demos: http://jqueryui.com/effect/
 
-	// Save & Show
-	$.effects.save( el, props );
-	el.show();
+( function( factory ) {
+	if ( typeof define === "function" && define.amd ) {
 
-	// Create Wrapper
-	wrapper = $.effects.createWrapper( el ).css({
-		overflow: "hidden"
-	});
-	animate = ( el[0].tagName === "IMG" ) ? wrapper : el;
-	distance = animate[ size ]();
+		// AMD. Register as an anonymous module.
+		define( [
+			"jquery",
+			"../version",
+			"../effect"
+		], factory );
+	} else {
 
-	// Shift
-	if ( show ) {
-		animate.css( size, 0 );
-		animate.css( position, distance / 2 );
+		// Browser globals
+		factory( jQuery );
+	}
+}( function( $ ) {
+
+return $.effects.define( "clip", "hide", function( options, done ) {
+	var start,
+		animate = {},
+		element = $( this ),
+		direction = options.direction || "vertical",
+		both = direction === "both",
+		horizontal = both || direction === "horizontal",
+		vertical = both || direction === "vertical";
+
+	start = element.cssClip();
+	animate.clip = {
+		top: vertical ? ( start.bottom - start.top ) / 2 : start.top,
+		right: horizontal ? ( start.right - start.left ) / 2 : start.right,
+		bottom: vertical ? ( start.bottom - start.top ) / 2 : start.bottom,
+		left: horizontal ? ( start.right - start.left ) / 2 : start.left
+	};
+
+	$.effects.createPlaceholder( element );
+
+	if ( options.mode === "show" ) {
+		element.cssClip( animate.clip );
+		animate.clip = start;
 	}
 
-	// Create Animation Object:
-	animation[ size ] = show ? distance : 0;
-	animation[ position ] = show ? 0 : distance / 2;
-
-	// Animate
-	animate.animate( animation, {
+	element.animate( animate, {
 		queue: false,
-		duration: o.duration,
-		easing: o.easing,
-		complete: function() {
-			if ( !show ) {
-				el.hide();
-			}
-			$.effects.restore( el, props );
-			$.effects.removeWrapper( el );
-			done();
-		}
-	});
+		duration: options.duration,
+		easing: options.easing,
+		complete: done
+	} );
 
-};
+} );
 
-})(jQuery);
+} ) );
